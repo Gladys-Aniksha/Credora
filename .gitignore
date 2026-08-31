@@ -1,0 +1,14 @@
+.venv/
+.pytest_cache/
+**/__pycache__/
+**/*.pyc
+*.log
+
+data/registry/*.sqlite3
+data/uploads/
+data/production_flows/
+data/production_windows/
+data/signing_keys/
+*.pem
+
+outputs/

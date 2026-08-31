@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+outputs
+*.log
+data/uploads
+data/registry/*.sqlite3
+reports/trust_reports/*.docx

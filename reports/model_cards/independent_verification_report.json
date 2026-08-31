@@ -1,0 +1,128 @@
+{
+  "model_path": "C:\\Users\\glady\\Mini project\\data\\sample_models\\traffic_rf_v1.joblib",
+  "dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_test.csv",
+  "metadata_path": "C:\\Users\\glady\\Mini project\\data\\metadata\\traffic_rf_v1_metadata.json",
+  "rows_evaluated": 225,
+  "feature_count": 8,
+  "feature_columns": [
+    "flow_duration",
+    "packet_count",
+    "avg_packet_size",
+    "bytes_sent",
+    "bytes_received",
+    "iat_mean",
+    "iat_std",
+    "flow_bytes_per_second"
+  ],
+  "target_column": "label",
+  "classes": [
+    "Normal",
+    "VPN",
+    "Suspicious"
+  ],
+  "accuracy": 1.0,
+  "precision_weighted": 1.0,
+  "recall_weighted": 1.0,
+  "f1_weighted": 1.0,
+  "f1_macro": 1.0,
+  "confusion_matrix": [
+    [
+      75,
+      0,
+      0
+    ],
+    [
+      0,
+      75,
+      0
+    ],
+    [
+      0,
+      0,
+      75
+    ]
+  ],
+  "classification_report": {
+    "Normal": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 75.0
+    },
+    "VPN": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 75.0
+    },
+    "Suspicious": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 75.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 225.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 225.0
+    }
+  },
+  "prediction_preview": [
+    {
+      "actual": "Normal",
+      "predicted": "Normal"
+    },
+    {
+      "actual": "VPN",
+      "predicted": "VPN"
+    },
+    {
+      "actual": "Normal",
+      "predicted": "Normal"
+    },
+    {
+      "actual": "Suspicious",
+      "predicted": "Suspicious"
+    },
+    {
+      "actual": "Suspicious",
+      "predicted": "Suspicious"
+    },
+    {
+      "actual": "VPN",
+      "predicted": "VPN"
+    },
+    {
+      "actual": "Suspicious",
+      "predicted": "Suspicious"
+    },
+    {
+      "actual": "VPN",
+      "predicted": "VPN"
+    },
+    {
+      "actual": "Normal",
+      "predicted": "Normal"
+    },
+    {
+      "actual": "VPN",
+      "predicted": "VPN"
+    },
+    {
+      "actual": "Suspicious",
+      "predicted": "Suspicious"
+    },
+    {
+      "actual": "Normal",
+      "predicted": "Normal"
+    }
+  ]
+}

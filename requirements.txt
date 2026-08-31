@@ -1,0 +1,39 @@
+# Backend API
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+sqlalchemy
+python-dotenv
+
+# Dashboard
+streamlit
+plotly
+
+# Machine learning and data processing
+pandas
+numpy
+scikit-learn
+joblib
+xgboost
+shap
+
+# Metrics and visualization
+matplotlib
+seaborn
+
+# Security scanning and verification
+pip-audit
+cryptography
+requests
+pyyaml
+packaging
+filetype
+
+# Report generation
+jinja2
+reportlab
+
+# Testing
+pytest
+python-docx

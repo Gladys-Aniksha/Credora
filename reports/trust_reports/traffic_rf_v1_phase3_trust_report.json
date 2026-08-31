@@ -1,0 +1,657 @@
+{
+  "model_name": "traffic_rf_v1",
+  "generated_at": "2026-08-31T14:49:11.503586+00:00",
+  "trust_score": 97.0,
+  "status": "Conditionally approved for production after listed controls are resolved.",
+  "module_results": [
+    {
+      "module": "model_verification",
+      "status": "pass",
+      "score": 90.0,
+      "summary": "Verified traffic_rf_v1.joblib; SHA256 captured and format reviewed.",
+      "findings": [
+        {
+          "module": "model_verification",
+          "title": "Pickle-based model format",
+          "severity": "medium",
+          "description": ".joblib and .pkl files can execute code if loaded from an untrusted source.",
+          "recommendation": "Only load verified models from trusted sources."
+        },
+        {
+          "module": "model_verification",
+          "title": "Hash matched metadata",
+          "severity": "info",
+          "description": "The model hash matches the supplied metadata.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "file_name": "traffic_rf_v1.joblib",
+        "extension": ".joblib",
+        "sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
+        "size_mb": 0.176
+      }
+    },
+    {
+      "module": "dependency_scanner",
+      "status": "pass",
+      "score": 90.0,
+      "summary": "Scanned 4 package(s) from requirements_demo.txt.",
+      "findings": [
+        {
+          "module": "dependency_scanner",
+          "title": "No vulnerabilities returned",
+          "severity": "info",
+          "description": "No known vulnerabilities were returned by the local audit command.",
+          "recommendation": ""
+        },
+        {
+          "module": "dependency_scanner",
+          "title": "pip-audit warning",
+          "severity": "low",
+          "description": "pip-audit could not fully complete: Command '['C:\\\\Users\\\\glady\\\\Mini project\\\\.venv\\\\Scripts\\\\python.exe', '-m', 'pip_audit', '-r', 'C:\\\\Users\\\\glady\\\\Mini project\\\\data\\\\sample_requirements\\\\requirements_demo.txt', '-f', 'json']' timed out after 45 seconds",
+          "recommendation": "Ensure pip-audit is installed and network access is available for full audits."
+        }
+      ],
+      "details": {
+        "package_count": 4,
+        "packages": [
+          "scikit-learn",
+          "pandas",
+          "numpy",
+          "joblib"
+        ],
+        "vulnerabilities": []
+      }
+    },
+    {
+      "module": "classifier_evaluation",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Evaluated 225 encrypted traffic flow record(s).",
+      "findings": [
+        {
+          "module": "classifier_evaluation",
+          "title": "Classifier performance is strong",
+          "severity": "info",
+          "description": "Weighted F1 is 1.00.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "labels": [
+          "Normal",
+          "Suspicious",
+          "VPN"
+        ],
+        "confusion_matrix": [
+          [
+            75,
+            0,
+            0
+          ],
+          [
+            0,
+            75,
+            0
+          ],
+          [
+            0,
+            0,
+            75
+          ]
+        ],
+        "feature_columns": [
+          "flow_duration",
+          "packet_count",
+          "avg_packet_size",
+          "bytes_sent",
+          "bytes_received",
+          "iat_mean",
+          "iat_std",
+          "flow_bytes_per_second"
+        ],
+        "class_metrics": {
+          "Normal": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 75.0
+          },
+          "Suspicious": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 75.0
+          },
+          "VPN": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 75.0
+          }
+        },
+        "weak_classes": [],
+        "confusion_pairs": []
+      }
+    },
+    {
+      "module": "robustness_testing",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Tested robustness with 5.0% numeric feature perturbation.",
+      "findings": [
+        {
+          "module": "robustness_testing",
+          "title": "Robust under small feature changes",
+          "severity": "info",
+          "description": "Perturbed F1 remained 1.000 with 1.000 prediction stability.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "noise_level": 0.05,
+        "baseline_f1": 1.0,
+        "perturbed_f1": 1.0,
+        "f1_drop": 0.0,
+        "prediction_stability": 1.0,
+        "perturbed_features": [
+          "flow_duration",
+          "packet_count",
+          "avg_packet_size",
+          "bytes_sent",
+          "bytes_received",
+          "iat_mean",
+          "iat_std",
+          "flow_bytes_per_second"
+        ]
+      }
+    },
+    {
+      "module": "data_drift_detection",
+      "status": "pass",
+      "score": 98.31,
+      "summary": "Compared 8 numeric traffic feature(s) against baseline data.",
+      "findings": [
+        {
+          "module": "data_drift_detection",
+          "title": "No major drift detected",
+          "severity": "info",
+          "description": "Current test traffic is close to the baseline feature distribution.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "baseline_dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_train.csv",
+        "current_dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_test.csv",
+        "mean_psi": 0.0478,
+        "max_psi": 0.0675,
+        "drifted_features": [],
+        "feature_drift": [
+          {
+            "feature": "flow_duration",
+            "psi": 0.0599,
+            "drift_level": "low"
+          },
+          {
+            "feature": "packet_count",
+            "psi": 0.0305,
+            "drift_level": "low"
+          },
+          {
+            "feature": "avg_packet_size",
+            "psi": 0.0532,
+            "drift_level": "low"
+          },
+          {
+            "feature": "bytes_sent",
+            "psi": 0.0434,
+            "drift_level": "low"
+          },
+          {
+            "feature": "bytes_received",
+            "psi": 0.0675,
+            "drift_level": "low"
+          },
+          {
+            "feature": "iat_mean",
+            "psi": 0.0319,
+            "drift_level": "low"
+          },
+          {
+            "feature": "iat_std",
+            "psi": 0.0484,
+            "drift_level": "low"
+          },
+          {
+            "feature": "flow_bytes_per_second",
+            "psi": 0.0478,
+            "drift_level": "low"
+          }
+        ]
+      }
+    },
+    {
+      "module": "explainability",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Extracted top feature influences using native RandomForestClassifier importance.",
+      "findings": [
+        {
+          "module": "explainability",
+          "title": "Feature importance available",
+          "severity": "info",
+          "description": "The model exposes usable feature-importance evidence.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "method": "feature_importances_",
+        "top_features": [
+          {
+            "feature": "flow_duration",
+            "importance": 0.21701
+          },
+          {
+            "feature": "packet_count",
+            "importance": 0.16665
+          },
+          {
+            "feature": "bytes_sent",
+            "importance": 0.14831
+          },
+          {
+            "feature": "bytes_received",
+            "importance": 0.14462
+          },
+          {
+            "feature": "flow_bytes_per_second",
+            "importance": 0.13779
+          },
+          {
+            "feature": "iat_mean",
+            "importance": 0.08837
+          },
+          {
+            "feature": "avg_packet_size",
+            "importance": 0.08208
+          },
+          {
+            "feature": "iat_std",
+            "importance": 0.01518
+          }
+        ],
+        "top_feature_importance": 0.21701,
+        "top_3_importance": 0.53197
+      }
+    },
+    {
+      "module": "behavior_analysis",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Analysed class behavior, confidence, confusion, and feature reliance across 225 flow record(s).",
+      "findings": [
+        {
+          "module": "behavior_analysis",
+          "title": "Security-sensitive class detection is strong",
+          "severity": "info",
+          "description": "The model correctly handles monitored class(es): Suspicious on this test set.",
+          "recommendation": "Keep a separate malicious/suspicious holdout set and retest before every deployment."
+        },
+        {
+          "module": "behavior_analysis",
+          "title": "Prediction confidence is stable",
+          "severity": "info",
+          "description": "Mean confidence is 0.9893; low-confidence rate is 0.0%.",
+          "recommendation": "Keep monitoring confidence drift in production traffic."
+        },
+        {
+          "module": "behavior_analysis",
+          "title": "Behavior uses distributed evidence",
+          "severity": "info",
+          "description": "Feature importance is not dominated by a single flow pattern.",
+          "recommendation": "Preserve this feature diversity when retraining future versions."
+        }
+      ],
+      "details": {
+        "confidence": {
+          "available": true,
+          "mean_confidence": 0.9893,
+          "p10_confidence": 0.9857,
+          "low_confidence_rate": 0.0
+        },
+        "weak_classes": [],
+        "malicious_or_suspicious_classes": [
+          "Suspicious"
+        ],
+        "confusion_pairs": [],
+        "top_features": [
+          {
+            "feature": "flow_duration",
+            "importance": 0.21701
+          },
+          {
+            "feature": "packet_count",
+            "importance": 0.16665
+          },
+          {
+            "feature": "bytes_sent",
+            "importance": 0.14831
+          },
+          {
+            "feature": "bytes_received",
+            "importance": 0.14462
+          },
+          {
+            "feature": "flow_bytes_per_second",
+            "importance": 0.13779
+          },
+          {
+            "feature": "iat_mean",
+            "importance": 0.08837
+          },
+          {
+            "feature": "avg_packet_size",
+            "importance": 0.08208
+          },
+          {
+            "feature": "iat_std",
+            "importance": 0.01518
+          }
+        ],
+        "class_metrics": {
+          "Normal": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 75.0
+          },
+          "VPN": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 75.0
+          },
+          "Suspicious": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 75.0
+          }
+        }
+      }
+    },
+    {
+      "module": "model_risk_analyzer",
+      "status": "pass",
+      "score": 88.0,
+      "summary": "Checked artifact-level model deployment risk indicators.",
+      "findings": [
+        {
+          "module": "model_risk_analyzer",
+          "title": "Unsafe serialization family",
+          "severity": "medium",
+          "description": "Pickle/joblib models can execute code when loaded from an untrusted source.",
+          "recommendation": "Accept only models from trusted sources and verify hashes before loading."
+        }
+      ],
+      "details": {
+        "file_name": "traffic_rf_v1.joblib",
+        "extension": ".joblib",
+        "size_mb": 0.176,
+        "metadata_fields": [
+          "algorithm",
+          "class_labels",
+          "demo_f1_score",
+          "expected_features",
+          "framework",
+          "model_name",
+          "sha256",
+          "signature_status",
+          "target_column",
+          "task",
+          "training_dataset_path",
+          "version"
+        ],
+        "expected_feature_count": 8
+      }
+    },
+    {
+      "module": "adversarial_validation",
+      "status": "pass",
+      "score": 97.77,
+      "summary": "Ran 3 adversarial encrypted-flow scenario(s); worst-case F1 was 0.982.",
+      "findings": [
+        {
+          "module": "adversarial_validation",
+          "title": "Adversarial release tests passed",
+          "severity": "info",
+          "description": "All 3 scenarios retained stable classifier behavior; worst-case F1 was 0.982.",
+          "recommendation": "Keep these scenarios as mandatory release tests and expand them with captured production traffic."
+        }
+      ],
+      "details": {
+        "baseline_f1": 1.0,
+        "baseline_sensitive_recall": 1.0,
+        "worst_case_f1": 0.9822,
+        "worst_case_scenario": "sensor_feature_dropout",
+        "max_f1_drop": 0.0178,
+        "absolute_f1_penalty": 0.0,
+        "absolute_sensitive_recall_penalty": 0.0,
+        "minimum_prediction_stability": 0.9822,
+        "worst_sensitive_recall": 1.0,
+        "sensitive_labels": [
+          "Suspicious"
+        ],
+        "scenarios": [
+          {
+            "scenario": "timing_jitter",
+            "description": "Large but plausible changes to duration and inter-arrival timing.",
+            "features_changed": [
+              "flow_duration",
+              "iat_mean",
+              "iat_std"
+            ],
+            "f1": 1.0,
+            "f1_drop": 0.0,
+            "prediction_stability": 1.0,
+            "sensitive_recall": 1.0
+          },
+          {
+            "scenario": "sensitive_flow_evasion",
+            "description": "Security-sensitive flows are blended toward benign byte and packet patterns.",
+            "features_changed": [
+              "packet_count",
+              "avg_packet_size",
+              "bytes_sent",
+              "bytes_received",
+              "flow_bytes_per_second"
+            ],
+            "f1": 1.0,
+            "f1_drop": 0.0,
+            "prediction_stability": 1.0,
+            "sensitive_recall": 1.0
+          },
+          {
+            "scenario": "sensor_feature_dropout",
+            "description": "The two strongest numeric sensor features are replaced by their median.",
+            "features_changed": [
+              "flow_duration",
+              "packet_count"
+            ],
+            "f1": 0.9822,
+            "f1_drop": 0.0178,
+            "prediction_stability": 0.9822,
+            "sensitive_recall": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "module": "runtime_integrity",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Compared the runtime model artifact with its approved integrity baseline.",
+      "findings": [
+        {
+          "module": "runtime_integrity",
+          "title": "Runtime hash baseline established",
+          "severity": "info",
+          "description": "The model artifact matches the approved SHA-256 value.",
+          "recommendation": "Recheck this hash at service startup and on a scheduled runtime interval."
+        }
+      ],
+      "details": {
+        "integrity_state": "verified",
+        "model_path": "C:\\Users\\glady\\Mini project\\data\\sample_models\\traffic_rf_v1.joblib",
+        "actual_sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
+        "expected_sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
+        "signature_valid": true,
+        "file_size_bytes": 184753,
+        "file_modified_at": "2026-08-18T10:00:52.462058+00:00",
+        "checked_at": "2026-08-31T14:49:11.461287+00:00"
+      }
+    },
+    {
+      "module": "deployment_gate",
+      "status": "warning",
+      "score": 100.0,
+      "summary": "Production deployment is conditional with 2 medium-risk finding(s).",
+      "findings": [
+        {
+          "module": "deployment_gate",
+          "title": "Deployment conditional",
+          "severity": "medium",
+          "description": "All mandatory score checks passed, but medium-risk controls still require review.",
+          "recommendation": "Only load verified models from trusted sources."
+        }
+      ],
+      "details": {
+        "decision": "conditional",
+        "checks": [
+          {
+            "check": "Trust score",
+            "passed": true,
+            "actual": 96.69,
+            "target": 85.0,
+            "required": true
+          },
+          {
+            "check": "Classifier score",
+            "passed": true,
+            "actual": 100.0,
+            "target": 85.0,
+            "required": true
+          },
+          {
+            "check": "Adversarial resilience",
+            "passed": true,
+            "actual": 97.77,
+            "target": 80.0,
+            "required": true
+          },
+          {
+            "check": "Runtime artifact integrity",
+            "passed": true,
+            "actual": "pass",
+            "target": "pass",
+            "required": true
+          },
+          {
+            "check": "Security-sensitive recall",
+            "passed": true,
+            "actual": 1.0,
+            "target": 0.9,
+            "required": true
+          },
+          {
+            "check": "No high-risk findings",
+            "passed": true,
+            "actual": 0,
+            "target": 0,
+            "required": true
+          }
+        ],
+        "failed_checks": [],
+        "high_risk_finding_count": 0,
+        "medium_risk_finding_count": 2,
+        "policy": {
+          "minimum_trust_score": 85.0,
+          "minimum_classifier_score": 85.0,
+          "minimum_adversarial_score": 80.0,
+          "minimum_sensitive_recall": 0.9
+        }
+      }
+    },
+    {
+      "module": "trust_drift_timeline",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Compared current trust score with 14 previous scan(s) for this model.",
+      "findings": [
+        {
+          "module": "trust_drift_timeline",
+          "title": "Trust score is stable",
+          "severity": "info",
+          "description": "No meaningful trust regression was detected against previous scans.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "previous_scan_count": 14,
+        "previous_latest_score": 97.0,
+        "previous_best_score": 97.74,
+        "drop_from_latest": 0.31,
+        "drop_from_best": 1.05
+      }
+    },
+    {
+      "module": "trust_score",
+      "status": "warning",
+      "score": 97.0,
+      "summary": "Conditionally approved for production after listed controls are resolved.",
+      "findings": [],
+      "details": {
+        "weights": {
+          "model_verification": 0.12,
+          "dependency_scanner": 0.08,
+          "classifier_evaluation": 0.18,
+          "robustness_testing": 0.1,
+          "data_drift_detection": 0.08,
+          "explainability": 0.05,
+          "behavior_analysis": 0.1,
+          "model_risk_analyzer": 0.07,
+          "adversarial_validation": 0.12,
+          "runtime_integrity": 0.08,
+          "deployment_gate": 0.08,
+          "trust_drift_timeline": 0.02
+        },
+        "modules_scored": [
+          "model_verification",
+          "dependency_scanner",
+          "classifier_evaluation",
+          "robustness_testing",
+          "data_drift_detection",
+          "explainability",
+          "behavior_analysis",
+          "model_risk_analyzer",
+          "adversarial_validation",
+          "runtime_integrity",
+          "deployment_gate",
+          "trust_drift_timeline"
+        ],
+        "deployment_decision": "conditional"
+      }
+    }
+  ],
+  "recommendations": [
+    "Only load verified models from trusted sources.",
+    "Ensure pip-audit is installed and network access is available for full audits.",
+    "Accept only models from trusted sources and verify hashes before loading."
+  ],
+  "docx_report_path": "C:\\Users\\glady\\Mini project\\reports\\trust_reports\\traffic_rf_v1_phase3_trust_report.docx"
+}
