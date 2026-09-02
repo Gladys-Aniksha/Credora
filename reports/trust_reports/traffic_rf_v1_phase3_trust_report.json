@@ -1,7 +1,7 @@
 {
   "model_name": "traffic_rf_v1",
-  "generated_at": "2026-08-31T14:49:11.503586+00:00",
-  "trust_score": 97.0,
+  "generated_at": "2026-09-02T09:45:48.920416+00:00",
+  "trust_score": 97.74,
   "status": "Conditionally approved for production after listed controls are resolved.",
   "module_results": [
     {
@@ -35,7 +35,7 @@
     {
       "module": "dependency_scanner",
       "status": "pass",
-      "score": 90.0,
+      "score": 100.0,
       "summary": "Scanned 4 package(s) from requirements_demo.txt.",
       "findings": [
         {
@@ -44,13 +44,6 @@
           "severity": "info",
           "description": "No known vulnerabilities were returned by the local audit command.",
           "recommendation": ""
-        },
-        {
-          "module": "dependency_scanner",
-          "title": "pip-audit warning",
-          "severity": "low",
-          "description": "pip-audit could not fully complete: Command '['C:\\\\Users\\\\glady\\\\Mini project\\\\.venv\\\\Scripts\\\\python.exe', '-m', 'pip_audit', '-r', 'C:\\\\Users\\\\glady\\\\Mini project\\\\data\\\\sample_requirements\\\\requirements_demo.txt', '-f', 'json']' timed out after 45 seconds",
-          "recommendation": "Ensure pip-audit is installed and network access is available for full audits."
         }
       ],
       "details": {
@@ -513,7 +506,7 @@
         "signature_valid": true,
         "file_size_bytes": 184753,
         "file_modified_at": "2026-08-18T10:00:52.462058+00:00",
-        "checked_at": "2026-08-31T14:49:11.461287+00:00"
+        "checked_at": "2026-09-02T09:45:48.817176+00:00"
       }
     },
     {
@@ -536,7 +529,7 @@
           {
             "check": "Trust score",
             "passed": true,
-            "actual": 96.69,
+            "actual": 97.51,
             "target": 85.0,
             "required": true
           },
@@ -591,28 +584,28 @@
       "module": "trust_drift_timeline",
       "status": "pass",
       "score": 100.0,
-      "summary": "Compared current trust score with 14 previous scan(s) for this model.",
+      "summary": "Compared current trust score with 0 previous scan(s) for this model.",
       "findings": [
         {
           "module": "trust_drift_timeline",
-          "title": "Trust score is stable",
+          "title": "First trust baseline created",
           "severity": "info",
-          "description": "No meaningful trust regression was detected against previous scans.",
+          "description": "No previous scan exists for this model, so this score becomes the baseline.",
           "recommendation": ""
         }
       ],
       "details": {
-        "previous_scan_count": 14,
-        "previous_latest_score": 97.0,
-        "previous_best_score": 97.74,
-        "drop_from_latest": 0.31,
-        "drop_from_best": 1.05
+        "previous_scan_count": 0,
+        "previous_latest_score": null,
+        "previous_best_score": null,
+        "drop_from_latest": 0.0,
+        "drop_from_best": 0.0
       }
     },
     {
       "module": "trust_score",
       "status": "warning",
-      "score": 97.0,
+      "score": 97.74,
       "summary": "Conditionally approved for production after listed controls are resolved.",
       "findings": [],
       "details": {
@@ -649,9 +642,174 @@
     }
   ],
   "recommendations": [
-    "Only load verified models from trusted sources.",
-    "Ensure pip-audit is installed and network access is available for full audits.",
-    "Accept only models from trusted sources and verify hashes before loading."
+    "Create a signed .trustai package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .joblib uploads outside the trusted packaging pipeline."
   ],
-  "docx_report_path": "C:\\Users\\glady\\Mini project\\reports\\trust_reports\\traffic_rf_v1_phase3_trust_report.docx"
+  "docx_report_path": "C:\\Users\\glady\\Mini project\\reports\\trust_reports\\traffic_rf_v1_phase3_trust_report.docx",
+  "analysis_trace": [
+    {
+      "step": 1,
+      "module": "model_verification",
+      "status": "pass",
+      "score": 90.0,
+      "method": "Calculated the artifact SHA-256, checked its format and size, and compared it with supplied identity metadata.",
+      "evidence": "File traffic_rf_v1.joblib, format .joblib, size 0.176 MB, SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "conclusion": "Verified traffic_rf_v1.joblib; SHA256 captured and format reviewed.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Pickle-based model format"
+      ]
+    },
+    {
+      "step": 2,
+      "module": "dependency_scanner",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Parsed the supplied dependency manifest and ran pip-audit to look for published package vulnerabilities.",
+      "evidence": "Parsed 4 package(s); found 0 vulnerability record(s).",
+      "conclusion": "Scanned 4 package(s) from requirements_demo.txt.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 3,
+      "module": "classifier_evaluation",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Ran the uploaded model against every labeled flow and calculated overall and per-class prediction metrics.",
+      "evidence": "Accuracy 1.0, weighted F1 1.0, recall 1.0.",
+      "conclusion": "Evaluated 225 encrypted traffic flow record(s).",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 4,
+      "module": "robustness_testing",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Perturbed numeric traffic features and compared the changed predictions with the clean baseline.",
+      "evidence": "Clean F1 1.0; perturbed F1 1.0; F1 drop 0.0; prediction stability 1.0.",
+      "conclusion": "Tested robustness with 5.0% numeric feature perturbation.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 5,
+      "module": "data_drift_detection",
+      "status": "pass",
+      "score": 98.31,
+      "method": "Compared numeric feature distributions with the training baseline using Population Stability Index (PSI).",
+      "evidence": "Compared 8 feature(s); drifted features: none; strongest shifts: bytes_received (PSI 0.068), flow_duration (PSI 0.06), avg_packet_size (PSI 0.053).",
+      "conclusion": "Compared 8 numeric traffic feature(s) against baseline data.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 6,
+      "module": "explainability",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Inspected native estimator feature importance to identify the traffic signals driving predictions.",
+      "evidence": "Method: feature_importances_; leading features: flow_duration (0.217), packet_count (0.167), bytes_sent (0.148).",
+      "conclusion": "Extracted top feature influences using native RandomForestClassifier importance.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 7,
+      "module": "behavior_analysis",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Examined class recall, confusion, probability confidence, and concentration of feature reliance.",
+      "evidence": "Weak classes: none; mean confidence 0.989; low-confidence rate 0.0.",
+      "conclusion": "Analysed class behavior, confidence, confusion, and feature reliance across 225 flow record(s).",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 8,
+      "module": "model_risk_analyzer",
+      "status": "pass",
+      "score": 88.0,
+      "method": "Reviewed artifact serialization, size, metadata completeness, expected features, and signing evidence.",
+      "evidence": "Artifact format .joblib, size 0.176 MB, 8 declared feature(s), metadata fields: algorithm, class_labels, demo_f1_score, expected_features, framework, model_name, sha256, signature_status, target_column, task, training_dataset_path, version.",
+      "conclusion": "Checked artifact-level model deployment risk indicators.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Unsafe serialization family"
+      ]
+    },
+    {
+      "step": 9,
+      "module": "adversarial_validation",
+      "status": "pass",
+      "score": 97.77,
+      "method": "Re-ran inference under timing jitter, security-sensitive evasion, and sensor feature-dropout scenarios.",
+      "evidence": "Worst scenario sensor_feature_dropout; worst F1 0.982; maximum F1 drop 0.018; minimum stability 0.982; security-sensitive recall 1.0.",
+      "conclusion": "Ran 3 adversarial encrypted-flow scenario(s); worst-case F1 was 0.982.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 10,
+      "module": "runtime_integrity",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Recalculated the model hash and compared it with the approved runtime identity baseline.",
+      "evidence": "Integrity state verified; expected SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73; observed SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "conclusion": "Compared the runtime model artifact with its approved integrity baseline.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 11,
+      "module": "deployment_gate",
+      "status": "warning",
+      "score": 100.0,
+      "method": "Applied mandatory trust, classifier, adversarial, integrity, and security-sensitive recall thresholds.",
+      "evidence": "Decision conditional; failed mandatory checks: none; high-risk findings 0; medium-risk findings 2.",
+      "conclusion": "Production deployment is conditional with 2 medium-risk finding(s).",
+      "issues_found": 1,
+      "issue_titles": [
+        "Deployment conditional"
+      ]
+    },
+    {
+      "step": 12,
+      "module": "trust_drift_timeline",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Compared the current trust result with earlier assessments for the same model identity.",
+      "evidence": "Previous scans 0; change from latest 0.0; distance from historical best 0.0.",
+      "conclusion": "Compared current trust score with 0 previous scan(s) for this model.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 13,
+      "module": "trust_score",
+      "status": "warning",
+      "score": 97.74,
+      "method": "Combined module scores using the published TrustAI Sentinel weighting policy.",
+      "evidence": "Final weighted score 97.74/100; deployment decision conditional.",
+      "conclusion": "Conditionally approved for production after listed controls are resolved.",
+      "issues_found": 0,
+      "issue_titles": []
+    }
+  ],
+  "remediation_plan": [
+    {
+      "priority": "P1",
+      "module": "model_verification",
+      "title": "Bind the model artifact to a trusted release identity",
+      "evidence": "Artifact traffic_rf_v1 uses .joblib; observed SHA-256 is fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "diagnosis": "Pickle-family artifacts may execute code when loaded, and metadata-only signature claims do not establish an external chain of trust.",
+      "fix": "Create a signed .trustai package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .joblib uploads outside the trusted packaging pipeline.",
+      "validation": "Verify the package with an independently supplied public key, then require the extracted model hash to equal the approved release hash before loading it.",
+      "finding_titles": [
+        "Pickle-based model format",
+        "Unsafe serialization family"
+      ],
+      "id": "FIX-01"
+    }
+  ]
 }

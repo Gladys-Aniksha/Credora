@@ -18,7 +18,7 @@ def test_signed_model_package_verifies_and_extracts(tmp_path) -> None:
     requirements = tmp_path / "requirements.txt"
     private_key = tmp_path / "private.pem"
     public_key = tmp_path / "public.pem"
-    package = tmp_path / "model.trustai"
+    package = tmp_path / "model.credora"
     model.write_bytes(b"trusted-model")
     metadata.write_text(json.dumps({"model_name": "trusted"}), encoding="utf-8")
     requirements.write_text("scikit-learn\n", encoding="utf-8")
@@ -39,7 +39,7 @@ def test_model_package_rejects_untrusted_key(tmp_path) -> None:
     public_key = tmp_path / "public.pem"
     wrong_private = tmp_path / "wrong-private.pem"
     wrong_public = tmp_path / "wrong-public.pem"
-    package = tmp_path / "model.trustai"
+    package = tmp_path / "model.credora"
     model.write_bytes(b"trusted-model")
     metadata.write_text("{}", encoding="utf-8")
     requirements.write_text("joblib\n", encoding="utf-8")

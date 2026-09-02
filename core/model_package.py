@@ -179,7 +179,7 @@ def verify_model_package(
 
 
 def inspect_model_package(package_path: str | Path, trusted_public_key_path: str | Path) -> dict[str, Any]:
-    with TemporaryDirectory(prefix="trustai-package-") as temp_dir:
+    with TemporaryDirectory(prefix="credora-package-") as temp_dir:
         verified = verify_model_package(package_path, trusted_public_key_path, temp_dir)
         return {
             "package_path": str(verified.package_path),

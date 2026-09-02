@@ -9,7 +9,7 @@ from typing import Any
 
 from core.config import DATA_DIR
 
-DB_PATH = DATA_DIR / "registry" / "trustai_registry.sqlite3"
+DB_PATH = DATA_DIR / "registry" / "credora_registry.sqlite3"
 
 
 def utc_now() -> str:

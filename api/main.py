@@ -24,7 +24,7 @@ from modules.phase3_operations.m7_flow_ingestion.collector import ingest_flow_fi
 from modules.phase3_operations.m8_production_monitoring.monitor import monitor_rolling_windows
 from scripts.run_phase1_scan import run_phase1_scan
 
-app = FastAPI(title="TrustAI Sentinel API", version="0.1.0")
+app = FastAPI(title="Credora API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,7 +44,7 @@ def on_startup() -> None:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "TrustAI Sentinel API"}
+    return {"status": "ok", "service": "Credora API"}
 
 
 @app.get("/models")

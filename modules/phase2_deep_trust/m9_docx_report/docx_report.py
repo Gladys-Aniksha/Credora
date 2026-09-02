@@ -25,7 +25,7 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
     section.left_margin = Inches(0.7)
     section.right_margin = Inches(0.7)
 
-    doc.add_heading("TrustAI Sentinel Trust Report", 0)
+    doc.add_heading("Credora Trust Report", 0)
     doc.add_paragraph(f"Model: {model_name}")
     doc.add_paragraph(f"Generated at: {report_dict.get('generated_at', 'unknown')}")
     doc.add_paragraph(f"Final trust score: {report_dict.get('trust_score', 0)}/100")
@@ -46,6 +46,21 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
         cells[2].text = str(result.get("score", ""))
         cells[3].text = str(result.get("summary", ""))
 
+    analysis_trace = report_dict.get("analysis_trace", [])
+    doc.add_heading("Deep Assessment Evidence", level=1)
+    if analysis_trace:
+        for step in analysis_trace:
+            doc.add_heading(
+                f"Step {step.get('step', '')}: {str(step.get('module', 'assessment')).replace('_', ' ').title()}",
+                level=2,
+            )
+            doc.add_paragraph(f"Status: {step.get('status', 'unknown')} | Score: {step.get('score', 0)}/100")
+            doc.add_paragraph(f"Method: {step.get('method', '')}")
+            doc.add_paragraph(f"Observed evidence: {step.get('evidence', '')}")
+            doc.add_paragraph(f"Conclusion: {step.get('conclusion', '')}")
+    else:
+        doc.add_paragraph("No detailed analysis trace was recorded for this legacy report.")
+
     doc.add_heading("Findings", level=1)
     for result in report_dict.get("module_results", []):
         findings = result.get("findings", [])
@@ -59,13 +74,17 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
             if recommendation:
                 doc.add_paragraph(f"Recommendation: {recommendation}")
 
-    recommendations = report_dict.get("recommendations", [])
-    doc.add_heading("Deployment Recommendations", level=1)
-    if recommendations:
-        for recommendation in recommendations:
-            doc.add_paragraph(str(recommendation), style="List Bullet")
+    remediation_plan = report_dict.get("remediation_plan", [])
+    doc.add_heading("Model-Specific Remediation Plan", level=1)
+    if remediation_plan:
+        for item in remediation_plan:
+            doc.add_heading(f"{item.get('id', 'FIX')} [{item.get('priority', 'P2')}] {item.get('title', 'Corrective action')}", level=2)
+            doc.add_paragraph(f"Evidence: {item.get('evidence', '')}")
+            doc.add_paragraph(f"Diagnosis: {item.get('diagnosis', '')}")
+            doc.add_paragraph(f"Required change: {item.get('fix', '')}")
+            doc.add_paragraph(f"Retest condition: {item.get('validation', '')}")
     else:
-        doc.add_paragraph("No recommendations were generated.")
+        doc.add_paragraph("No corrective action is required by the current assessment evidence.")
 
     doc.save(path)
     return path

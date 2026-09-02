@@ -19,14 +19,14 @@ from core.model_package import (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create and verify signed TrustAI model packages.")
+    parser = argparse.ArgumentParser(description="Create and verify signed Credora model packages.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     keygen = subparsers.add_parser("keygen", help="Generate an Ed25519 signing keypair.")
     keygen.add_argument("--private-key", type=Path, required=True)
     keygen.add_argument("--public-key", type=Path, required=True)
 
-    create = subparsers.add_parser("create", help="Create a signed .trustai model package.")
+    create = subparsers.add_parser("create", help="Create a signed .credora model package.")
     create.add_argument("--model", type=Path, required=True)
     create.add_argument("--metadata", type=Path, required=True)
     create.add_argument("--requirements", type=Path, required=True)

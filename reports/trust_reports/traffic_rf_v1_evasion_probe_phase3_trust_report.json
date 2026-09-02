@@ -1,7 +1,7 @@
 {
   "model_name": "traffic_rf_v1_evasion_probe",
-  "generated_at": "2026-08-31T14:41:35.350112+00:00",
-  "trust_score": 61.29,
+  "generated_at": "2026-09-02T09:11:16.174189+00:00",
+  "trust_score": 62.03,
   "status": "Blocked by the Phase 3 production deployment gate.",
   "module_results": [
     {
@@ -35,7 +35,7 @@
     {
       "module": "dependency_scanner",
       "status": "pass",
-      "score": 90.0,
+      "score": 100.0,
       "summary": "Scanned 4 package(s) from requirements.txt.",
       "findings": [
         {
@@ -44,13 +44,6 @@
           "severity": "info",
           "description": "No known vulnerabilities were returned by the local audit command.",
           "recommendation": ""
-        },
-        {
-          "module": "dependency_scanner",
-          "title": "pip-audit warning",
-          "severity": "low",
-          "description": "pip-audit could not fully complete: Command '['C:\\\\Users\\\\glady\\\\Mini project\\\\.venv\\\\Scripts\\\\python.exe', '-m', 'pip_audit', '-r', 'data\\\\phase3_validation\\\\traffic_rf_v1_evasion_probe\\\\requirements.txt', '-f', 'json']' timed out after 45 seconds",
-          "recommendation": "Ensure pip-audit is installed and network access is available for full audits."
         }
       ],
       "details": {
@@ -613,7 +606,7 @@
         "signature_valid": true,
         "file_size_bytes": 184753,
         "file_modified_at": "2026-08-18T10:00:52.462058+00:00",
-        "checked_at": "2026-08-31T14:41:35.330141+00:00"
+        "checked_at": "2026-09-02T09:11:16.167506+00:00"
       }
     },
     {
@@ -636,7 +629,7 @@
           {
             "check": "Trust score",
             "passed": false,
-            "actual": 64.14,
+            "actual": 64.96,
             "target": 85.0,
             "required": true
           },
@@ -697,7 +690,7 @@
       "module": "trust_drift_timeline",
       "status": "pass",
       "score": 100.0,
-      "summary": "Compared current trust score with 2 previous scan(s) for this model.",
+      "summary": "Compared current trust score with 7 previous scan(s) for this model.",
       "findings": [
         {
           "module": "trust_drift_timeline",
@@ -708,17 +701,17 @@
         }
       ],
       "details": {
-        "previous_scan_count": 2,
-        "previous_latest_score": 61.7,
+        "previous_scan_count": 7,
+        "previous_latest_score": 61.29,
         "previous_best_score": 73.39,
-        "drop_from_latest": -2.44,
-        "drop_from_best": 9.25
+        "drop_from_latest": -3.67,
+        "drop_from_best": 8.43
       }
     },
     {
       "module": "trust_score",
       "status": "fail",
-      "score": 61.29,
+      "score": 62.03,
       "summary": "Blocked by the Phase 3 production deployment gate.",
       "findings": [
         {
@@ -763,17 +756,247 @@
     }
   ],
   "recommendations": [
-    "Only load verified models from trusted sources.",
-    "Ensure pip-audit is installed and network access is available for full audits.",
-    "Retrain or tune the classifier before deployment.",
-    "Collect more labeled Suspicious flows, rebalance class weights, and rerun the scan before deployment.",
-    "Add features that separate Suspicious from VPN and validate the confusion matrix after retraining.",
-    "Re-evaluate or retrain the classifier with current traffic data.",
-    "Add more labeled Suspicious flows, tune class weights, and set a deployment gate that blocks release until recall for these classes is at least 0.90.",
-    "Add targeted features that separate Suspicious from VPN, then retrain and compare the confusion matrix.",
-    "Accept only models from trusted sources and verify hashes before loading.",
-    "Block deployment, add adversarially varied suspicious flows to training, and require security-sensitive recall of at least 0.90 on the release holdout.",
-    "Resolve high-risk findings before deployment."
+    "Add labeled training variants that reproduce sensor_feature_dropout, preserve the original clean holdout, and tune the classifier against both clean and attacked samples rather than optimizing only aggregate accuracy.",
+    "Review the Suspicious -> VPN rows, add correctly labeled examples near that boundary, rebalance or cost-weight Suspicious, retrain, and compare the new per-class confusion matrix with this report.",
+    "Validate capture units and preprocessing for flow_duration, flow_bytes_per_second, iat_mean, bytes_sent, label a representative recent traffic window, and retrain or recalibrate with that window instead of mixing unverified shifted data into training.",
+    "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
+    "Create a signed .credora package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .joblib uploads outside the trusted packaging pipeline."
   ],
-  "docx_report_path": "C:\\Users\\glady\\Mini project\\reports\\trust_reports\\traffic_rf_v1_evasion_probe_phase3_trust_report.docx"
+  "docx_report_path": "C:\\Users\\glady\\Mini project\\reports\\trust_reports\\traffic_rf_v1_evasion_probe_phase3_trust_report.docx",
+  "analysis_trace": [
+    {
+      "step": 1,
+      "module": "model_verification",
+      "status": "pass",
+      "score": 90.0,
+      "method": "Calculated the artifact SHA-256, checked its format and size, and compared it with supplied identity metadata.",
+      "evidence": "File traffic_rf_v1.joblib, format .joblib, size 0.176 MB, SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "conclusion": "Verified traffic_rf_v1.joblib; SHA256 captured and format reviewed.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Pickle-based model format"
+      ]
+    },
+    {
+      "step": 2,
+      "module": "dependency_scanner",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Parsed the supplied dependency manifest and ran pip-audit to look for published package vulnerabilities.",
+      "evidence": "Parsed 4 package(s); found 0 vulnerability record(s).",
+      "conclusion": "Scanned 4 package(s) from requirements.txt.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 3,
+      "module": "classifier_evaluation",
+      "status": "fail",
+      "score": 55.56,
+      "method": "Ran the uploaded model against every labeled flow and calculated overall and per-class prediction metrics.",
+      "evidence": "Accuracy 0.667, weighted F1 0.556, recall 0.667. Weakest class: Suspicious (F1 0.0, recall 0.0). Largest confusion: Suspicious -> VPN (75 flow(s)).",
+      "conclusion": "Evaluated 225 encrypted traffic flow record(s).",
+      "issues_found": 3,
+      "issue_titles": [
+        "Low classifier F1 score",
+        "Weak class-specific performance",
+        "Most common class confusion"
+      ]
+    },
+    {
+      "step": 4,
+      "module": "robustness_testing",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Perturbed numeric traffic features and compared the changed predictions with the clean baseline.",
+      "evidence": "Clean F1 0.556; perturbed F1 0.556; F1 drop 0.0; prediction stability 1.0.",
+      "conclusion": "Tested robustness with 5.0% numeric feature perturbation.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 5,
+      "module": "data_drift_detection",
+      "status": "fail",
+      "score": 0.0,
+      "method": "Compared numeric feature distributions with the training baseline using Population Stability Index (PSI).",
+      "evidence": "Compared 8 feature(s); drifted features: flow_duration, packet_count, avg_packet_size, bytes_sent, bytes_received, iat_mean, iat_std, flow_bytes_per_second; strongest shifts: flow_duration (PSI 2.609), flow_bytes_per_second (PSI 2.522), iat_mean (PSI 2.505).",
+      "conclusion": "Compared 8 numeric traffic feature(s) against baseline data.",
+      "issues_found": 1,
+      "issue_titles": [
+        "High data drift detected"
+      ]
+    },
+    {
+      "step": 6,
+      "module": "explainability",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Inspected native estimator feature importance to identify the traffic signals driving predictions.",
+      "evidence": "Method: feature_importances_; leading features: flow_duration (0.217), packet_count (0.167), bytes_sent (0.148).",
+      "conclusion": "Extracted top feature influences using native RandomForestClassifier importance.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 7,
+      "module": "behavior_analysis",
+      "status": "warning",
+      "score": 57.0,
+      "method": "Examined class recall, confusion, probability confidence, and concentration of feature reliance.",
+      "evidence": "Weak classes: VPN, Suspicious; mean confidence 0.905; low-confidence rate 0.009. Main confusion: Suspicious -> VPN (75 flow(s)).",
+      "conclusion": "Analysed class behavior, confidence, confusion, and feature reliance across 225 flow record(s).",
+      "issues_found": 2,
+      "issue_titles": [
+        "Weak malicious/suspicious class detection",
+        "Class confusion detected"
+      ]
+    },
+    {
+      "step": 8,
+      "module": "model_risk_analyzer",
+      "status": "pass",
+      "score": 88.0,
+      "method": "Reviewed artifact serialization, size, metadata completeness, expected features, and signing evidence.",
+      "evidence": "Artifact format .joblib, size 0.176 MB, 8 declared feature(s), metadata fields: algorithm, class_labels, demo_f1_score, deployment_policy, expected_features, framework, model_name, sha256, signature_status, target_column, task, training_dataset_path, validation_profile, version.",
+      "conclusion": "Checked artifact-level model deployment risk indicators.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Unsafe serialization family"
+      ]
+    },
+    {
+      "step": 9,
+      "module": "adversarial_validation",
+      "status": "fail",
+      "score": 0.0,
+      "method": "Re-ran inference under timing jitter, security-sensitive evasion, and sensor feature-dropout scenarios.",
+      "evidence": "Worst scenario sensor_feature_dropout; worst F1 0.542; maximum F1 drop 0.013; minimum stability 0.982; security-sensitive recall 0.0.",
+      "conclusion": "Ran 3 adversarial encrypted-flow scenario(s); worst-case F1 was 0.542.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Adversarial traffic bypass risk"
+      ]
+    },
+    {
+      "step": 10,
+      "module": "runtime_integrity",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Recalculated the model hash and compared it with the approved runtime identity baseline.",
+      "evidence": "Integrity state verified; expected SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73; observed SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "conclusion": "Compared the runtime model artifact with its approved integrity baseline.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 11,
+      "module": "deployment_gate",
+      "status": "fail",
+      "score": 16.67,
+      "method": "Applied mandatory trust, classifier, adversarial, integrity, and security-sensitive recall thresholds.",
+      "evidence": "Decision blocked; failed mandatory checks: Trust score, Classifier score, Adversarial resilience, Security-sensitive recall, No high-risk findings; high-risk findings 4; medium-risk findings 5.",
+      "conclusion": "Production deployment blocked by 5 required gate check(s).",
+      "issues_found": 1,
+      "issue_titles": [
+        "Deployment blocked"
+      ]
+    },
+    {
+      "step": 12,
+      "module": "trust_drift_timeline",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Compared the current trust result with earlier assessments for the same model identity.",
+      "evidence": "Previous scans 7; change from latest -3.67; distance from historical best 8.43.",
+      "conclusion": "Compared current trust score with 7 previous scan(s) for this model.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 13,
+      "module": "trust_score",
+      "status": "fail",
+      "score": 62.03,
+      "method": "Combined module scores using the published Credora weighting policy.",
+      "evidence": "Final weighted score 62.03/100; deployment decision blocked.",
+      "conclusion": "Blocked by the Phase 3 production deployment gate.",
+      "issues_found": 1,
+      "issue_titles": [
+        "High-risk findings present"
+      ]
+    }
+  ],
+  "remediation_plan": [
+    {
+      "priority": "P0",
+      "module": "adversarial_validation",
+      "title": "Harden against sensor_feature_dropout",
+      "evidence": "Worst scenario sensor_feature_dropout; worst F1 0.542; maximum F1 drop 0.013; minimum stability 0.982; security-sensitive recall 0.0.",
+      "diagnosis": "The weakest attacked behavior occurs under sensor_feature_dropout, affecting Suspicious detection.",
+      "fix": "Add labeled training variants that reproduce sensor_feature_dropout, preserve the original clean holdout, and tune the classifier against both clean and attacked samples rather than optimizing only aggregate accuracy.",
+      "validation": "Require worst-case F1 and security-sensitive recall of at least 0.90 across every adversarial scenario before the release gate can pass.",
+      "finding_titles": [
+        "Adversarial traffic bypass risk"
+      ],
+      "id": "FIX-01"
+    },
+    {
+      "priority": "P0",
+      "module": "classifier_evaluation",
+      "title": "Recover Suspicious detection",
+      "evidence": "Accuracy 0.667, weighted F1 0.556, recall 0.667. Weakest class: Suspicious (F1 0.0, recall 0.0). Largest confusion: Suspicious -> VPN (75 flow(s)).",
+      "diagnosis": "traffic_rf_v1_evasion_probe has not learned a reliable boundary for Suspicious; its largest observed confusion is with VPN across 75 labeled flow(s).",
+      "fix": "Review the Suspicious -> VPN rows, add correctly labeled examples near that boundary, rebalance or cost-weight Suspicious, retrain, and compare the new per-class confusion matrix with this report.",
+      "validation": "Do not release until Suspicious recall and F1 are both at least 0.90 and the Suspicious -> VPN error count is materially reduced on an untouched holdout set.",
+      "finding_titles": [
+        "Low classifier F1 score",
+        "Weak class-specific performance",
+        "Most common class confusion",
+        "Weak malicious/suspicious class detection",
+        "Class confusion detected"
+      ],
+      "id": "FIX-02"
+    },
+    {
+      "priority": "P0",
+      "module": "data_drift_detection",
+      "title": "Rebuild the traffic baseline around observed shifts",
+      "evidence": "Compared 8 feature(s); drifted features: flow_duration, packet_count, avg_packet_size, bytes_sent, bytes_received, iat_mean, iat_std, flow_bytes_per_second; strongest shifts: flow_duration (PSI 2.609), flow_bytes_per_second (PSI 2.522), iat_mean (PSI 2.505).",
+      "diagnosis": "The evaluation traffic no longer resembles the training distribution, led by flow_duration, flow_bytes_per_second, iat_mean, bytes_sent.",
+      "fix": "Validate capture units and preprocessing for flow_duration, flow_bytes_per_second, iat_mean, bytes_sent, label a representative recent traffic window, and retrain or recalibrate with that window instead of mixing unverified shifted data into training.",
+      "validation": "Rerun PSI on a separate recent window; every release-critical feature should be below 0.25 and classifier performance must remain above its gate threshold.",
+      "finding_titles": [
+        "High data drift detected"
+      ],
+      "id": "FIX-03"
+    },
+    {
+      "priority": "P0",
+      "module": "deployment_gate",
+      "title": "Keep deployment blocked until mandatory evidence passes",
+      "evidence": "Decision blocked; failed mandatory checks: Trust score, Classifier score, Adversarial resilience, Security-sensitive recall, No high-risk findings; high-risk findings 4; medium-risk findings 5.",
+      "diagnosis": "The release fails mandatory controls: Trust score, Classifier score, Adversarial resilience, Security-sensitive recall, No high-risk findings.",
+      "fix": "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
+      "validation": "Every mandatory check must report passed, with no high/critical finding and a final decision of approved or explicitly reviewed conditional according to policy.",
+      "finding_titles": [
+        "Deployment blocked"
+      ],
+      "id": "FIX-04"
+    },
+    {
+      "priority": "P1",
+      "module": "model_verification",
+      "title": "Bind the model artifact to a trusted release identity",
+      "evidence": "Artifact traffic_rf_v1_evasion_probe uses .joblib; observed SHA-256 is fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "diagnosis": "Pickle-family artifacts may execute code when loaded, and metadata-only signature claims do not establish an external chain of trust.",
+      "fix": "Create a signed .credora package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .joblib uploads outside the trusted packaging pipeline.",
+      "validation": "Verify the package with an independently supplied public key, then require the extracted model hash to equal the approved release hash before loading it.",
+      "finding_titles": [
+        "Pickle-based model format",
+        "Unsafe serialization family"
+      ],
+      "id": "FIX-05"
+    }
+  ]
 }

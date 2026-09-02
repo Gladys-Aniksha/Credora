@@ -13,7 +13,7 @@ from modules.phase3_operations.m7_flow_ingestion.collector import ingest_flow_fi
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Convert Zeek or CICFlowMeter output into TrustAI flow features.")
+    parser = argparse.ArgumentParser(description="Convert Zeek or CICFlowMeter output into Credora flow features.")
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--format", choices=["auto", "zeek", "cicflowmeter", "csv"], default="auto")
     parser.add_argument("--output", type=Path, required=True)

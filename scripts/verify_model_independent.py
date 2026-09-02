@@ -91,7 +91,7 @@ def print_report(report: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Verify the encrypted traffic classifier without using TrustAI Sentinel."
+        description="Verify the encrypted traffic classifier without using Credora."
     )
     parser.add_argument(
         "--model",

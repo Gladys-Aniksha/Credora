@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.config import REPORT_DIR
+from core.assessment_insights import build_analysis_trace, build_remediation_plan
 from core.db import register_model, save_scan
 from core.hashing import sha256_file
 from core.report_schema import ModuleResult, TrustReport
@@ -41,52 +42,63 @@ def run_phase1_scan(
         if progress_callback:
             progress_callback(level, message)
 
+    def run_step(level: str, message: str, runner) -> ModuleResult:
+        progress(level, f"Starting: {message}")
+        result = runner()
+        issues = [finding.title for finding in result.findings if finding.severity != "info"]
+        issue_text = f" Issues: {', '.join(issues[:3])}." if issues else " No actionable issue was found."
+        progress(
+            level,
+            f"Completed: {result.status.upper()} at {result.score:.1f}/100. {result.summary}{issue_text}",
+        )
+        return result
+
     metadata = {}
+    progress("Level 0 - Intake", "Starting: validating uploaded paths and reading model metadata.")
     if metadata_path and Path(metadata_path).exists():
-        progress("Level 0 - Intake", "Reading model metadata and preparing assessment inputs.")
         metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
+        progress(
+            "Level 0 - Intake",
+            f"Completed: loaded metadata for {metadata.get('model_name', Path(model_path).stem)} with {len(metadata.get('expected_features', []))} declared feature(s).",
+        )
+    else:
+        progress("Level 0 - Intake", "Completed with warning: no metadata file was supplied; identity and feature checks will be limited.")
 
     results: list[ModuleResult] = []
-    progress("Level 1 - Integrity", "Verifying model file type, hash, signature metadata, and artifact size.")
-    results.append(verify_model(model_path, metadata))
-    progress("Level 2 - Supply Chain", "Scanning dependency file for package and vulnerability risk.")
-    results.append(scan_dependencies(requirements_path))
-    progress("Level 3 - Classifier Performance", "Running predictions on the labeled encrypted-flow test dataset.")
-    results.append(evaluate_classifier(model_path, dataset_path, metadata))
-    progress("Level 4 - Robustness", "Perturbing numeric flow features to see whether predictions remain stable.")
-    results.append(test_robustness(model_path, dataset_path, metadata))
-    progress("Level 5 - Data Drift", "Comparing uploaded traffic features against the training baseline distribution.")
-    results.append(detect_data_drift(dataset_path, metadata))
-    progress("Level 6 - Explainability", "Inspecting which traffic features drive the model's decisions.")
-    results.append(explain_model(model_path, dataset_path, metadata))
-    progress("Level 7 - Behavior Analysis", "Checking confidence, class confusion, suspicious-class recall, and behavior-specific weaknesses.")
-    results.append(analyze_behavior(model_path, dataset_path, metadata))
-    progress("Level 8 - Model Risk", "Assessing serialization format, metadata completeness, and deployment-risk indicators.")
-    results.append(analyze_model_risk(model_path, metadata))
-    progress("Level 9 - Adversarial Validation", "Testing timing jitter, sensitive-flow evasion, and sensor feature dropout scenarios.")
-    results.append(run_adversarial_validation(model_path, dataset_path, metadata))
-    progress("Level 10 - Runtime Integrity", "Establishing the approved runtime hash and signature baseline.")
-    results.append(check_runtime_integrity(model_path, metadata))
+    results.append(run_step("Level 1 - Integrity", "calculating the artifact hash and checking type, signature metadata, and size.", lambda: verify_model(model_path, metadata)))
+    results.append(run_step("Level 2 - Supply Chain", "auditing declared packages and known dependency vulnerabilities.", lambda: scan_dependencies(requirements_path)))
+    results.append(run_step("Level 3 - Classifier Performance", "running every labeled flow through the model and calculating per-class metrics.", lambda: evaluate_classifier(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 4 - Robustness", "perturbing numeric flow features and measuring prediction stability.", lambda: test_robustness(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 5 - Data Drift", "comparing current flow distributions with the training baseline using PSI.", lambda: detect_data_drift(dataset_path, metadata)))
+    results.append(run_step("Level 6 - Explainability", "ranking the traffic features that drive model decisions.", lambda: explain_model(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 7 - Behavior Analysis", "examining confidence, weak classes, security-sensitive recall, confusion, and feature reliance.", lambda: analyze_behavior(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 8 - Model Risk", "reviewing serialization, metadata completeness, artifact size, and deployment-risk indicators.", lambda: analyze_model_risk(model_path, metadata)))
+    results.append(run_step("Level 9 - Adversarial Validation", "testing timing jitter, sensitive-flow evasion, and sensor feature dropout.", lambda: run_adversarial_validation(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 10 - Runtime Integrity", "comparing the active artifact with its approved hash and signature baseline.", lambda: check_runtime_integrity(model_path, metadata)))
 
-    progress("Level 11 - Trust Scoring", "Combining validation evidence into a preliminary production trust score.")
+    progress("Level 11 - Trust Scoring", "Starting: combining module evidence using the published weighting policy.")
     preliminary_trust = calculate_trust_score(results)
-    progress("Level 12 - Deployment Gate", "Applying mandatory production score, integrity, and security-sensitive recall gates.")
-    results.append(evaluate_deployment_gate(results, preliminary_trust.score, metadata))
+    progress("Level 11 - Trust Scoring", f"Completed: preliminary trust score is {preliminary_trust.score:.1f}/100.")
+    results.append(run_step("Level 12 - Deployment Gate", "applying mandatory score, integrity, adversarial, and security-sensitive recall controls.", lambda: evaluate_deployment_gate(results, preliminary_trust.score, metadata)))
     model_name = metadata.get("model_name") or Path(model_path).stem
-    progress("Level 13 - Trust Drift", "Comparing this model score with prior scans for suspicious trust changes.")
-    results.append(analyze_trust_drift(preliminary_trust.score, model_name))
-    progress("Level 14 - Final Report", "Building the production gate decision, tailored fixes, and Phase 3 report.")
+    results.append(run_step("Level 13 - Trust Drift", "comparing this score with prior assessments of the same model identity.", lambda: analyze_trust_drift(preliminary_trust.score, model_name)))
+    progress("Level 14 - Final Report", "Starting: interpreting evidence and generating model-specific corrective actions and retest conditions.")
     trust_result = calculate_trust_score(results)
     results.append(trust_result)
 
-    recommendations = []
-    for result in results:
-        for finding in result.findings:
-            if finding.recommendation and finding.severity != "info":
-                recommendations.append(finding.recommendation)
-    recommendations = list(dict.fromkeys(recommendations))
+    analysis_trace = build_analysis_trace(results)
+    remediation_plan = build_remediation_plan(results, model_name, metadata)
+    recommendations = [item["fix"] for item in remediation_plan]
 
-    report = TrustReport.create(model_name, trust_result.score, trust_result.summary, results, recommendations)
+    report = TrustReport.create(
+        model_name,
+        trust_result.score,
+        trust_result.summary,
+        results,
+        recommendations,
+        analysis_trace=analysis_trace,
+        remediation_plan=remediation_plan,
+    )
     output_path = REPORT_DIR / f"{model_name}_phase3_trust_report.json"
 
     docx_path = None
@@ -104,7 +116,18 @@ def run_phase1_scan(
             ))
             trust_result = calculate_trust_score([result for result in results if result.module != "trust_score"])
             results = [result for result in results if result.module != "trust_score"] + [trust_result]
-            report = TrustReport.create(model_name, trust_result.score, trust_result.summary, results, recommendations)
+            analysis_trace = build_analysis_trace(results)
+            remediation_plan = build_remediation_plan(results, model_name, metadata)
+            recommendations = [item["fix"] for item in remediation_plan]
+            report = TrustReport.create(
+                model_name,
+                trust_result.score,
+                trust_result.summary,
+                results,
+                recommendations,
+                analysis_trace=analysis_trace,
+                remediation_plan=remediation_plan,
+            )
 
     if docx_path:
         report.docx_report_path = str(docx_path)
@@ -124,6 +147,10 @@ def run_phase1_scan(
         sha256=sha256_file(model_path),
     )
     save_scan(report_dict, output_path)
+    progress(
+        "Level 14 - Final Report",
+        f"Completed: saved deep evidence with {len(analysis_trace)} analysis record(s) and {len(remediation_plan)} model-specific fix(es).",
+    )
     return report
 
 
@@ -132,7 +159,7 @@ if __name__ == "__main__":
 
     from core.config import METADATA_DIR, PROCESSED_DATA_DIR, SAMPLE_MODEL_DIR, SAMPLE_REQUIREMENTS_DIR
 
-    parser = argparse.ArgumentParser(description="Run the complete TrustAI Sentinel Phase 1-3 assessment.")
+    parser = argparse.ArgumentParser(description="Run the complete Credora Phase 1-3 assessment.")
     parser.add_argument("--model", type=Path, default=SAMPLE_MODEL_DIR / "traffic_rf_v1.joblib")
     parser.add_argument("--dataset", type=Path, default=PROCESSED_DATA_DIR / "encrypted_traffic_test.csv")
     parser.add_argument("--requirements", type=Path, default=SAMPLE_REQUIREMENTS_DIR / "requirements_demo.txt")

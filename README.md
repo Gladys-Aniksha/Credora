@@ -1,4 +1,4 @@
-# TrustAI Sentinel
+# Credora
 
 **A trust and security assessment framework for encrypted traffic classification models that verifies model integrity, evaluates classifier performance, scans security risks, tracks trust drift, and generates deployment-readiness reports.**
 
@@ -6,7 +6,7 @@
 
 ## 1. Vision
 
-> TrustAI Sentinel helps users answer one core question: "Can I trust this encrypted traffic classification model enough to deploy it?"
+> Credora helps users answer one core question: "Can I trust this encrypted traffic classification model enough to deploy it?"
 
 Every module in this repository should trace back to this sentence. If a feature does not help evaluate the security, reliability, explainability, or deployment readiness of an encrypted traffic classification model, it does not belong in v1.
 
@@ -94,7 +94,7 @@ Keep this distinction explicit in any pitch, paper, or demo. The project is stro
 ## 4. Full Repository Structure
 
 ```text
-trustai-sentinel/
+credora/
 |
 |-- README.md
 |-- LICENSE
@@ -370,7 +370,7 @@ Suggested local run flow once implemented:
 
 ## 10. Independent Model Verification
 
-Before comparing TrustAI Sentinel results, verify the encrypted traffic classifier outside the dashboard:
+Before comparing Credora results, verify the encrypted traffic classifier outside the dashboard:
 
 ```powershell
 cd "C:\Users\glady\Mini project"
@@ -401,7 +401,7 @@ Files used:
 | Test dataset | `data/processed/encrypted_traffic_test.csv` |
 | Metadata | `data/metadata/traffic_rf_v1_metadata.json` |
 
-Use this result as the ground truth. When the same model and dataset are scanned in TrustAI Sentinel, the classifier metrics should match this independent report.
+Use this result as the ground truth. When the same model and dataset are scanned in Credora, the classifier metrics should match this independent report.
 
 ---
 
@@ -427,7 +427,7 @@ http://localhost:8501
 
 In the sidebar, open **Upload & Analyze Model**, choose **Demo model**, then click **Analyze model now**.
 
-### Run the full TrustAI scan from terminal
+### Run the full Credora scan from terminal
 
 ```powershell
 & ".venv\Scripts\python.exe" scripts\run_phase1_scan.py
@@ -478,7 +478,7 @@ For CICFlowMeter, use `--format cicflowmeter`. The converter writes the eight me
   --window-size 250
 ```
 
-Each window and any resulting alert are persisted in `data/registry/trustai_registry.sqlite3` and shown in **Trust Drift** and **Alerts**.
+Each window and any resulting alert are persisted in `data/registry/credora_registry.sqlite3` and shown in **Trust Drift** and **Alerts**.
 
 ### Create a signed model package
 
@@ -492,10 +492,10 @@ Each window and any resulting alert are persisted in `data/registry/trustai_regi
   --metadata data\metadata\traffic_rf_v1_metadata.json `
   --requirements data\sample_requirements\requirements_demo.txt `
   --private-key data\signing_keys\release-private.pem `
-  --output data\packages\traffic_rf_v1.trustai
+  --output data\packages\traffic_rf_v1.credora
 
 & ".venv\Scripts\python.exe" scripts\package_model.py verify `
-  --package data\packages\traffic_rf_v1.trustai `
+  --package data\packages\traffic_rf_v1.credora `
   --public-key data\signing_keys\release-public.pem
 ```
 
@@ -531,7 +531,7 @@ This keeps the legitimate trained model but shifts security-sensitive flow featu
 & ".venv\Scripts\python.exe" scripts\verify_model_independent.py
 ```
 
-This checks the classifier without using TrustAI Sentinel. Use this output as the baseline for comparison with the dashboard.
+This checks the classifier without using Credora. Use this output as the baseline for comparison with the dashboard.
 
 ### Test the classifier in a real-time simulation
 
@@ -591,7 +591,7 @@ This recreates the demo Random Forest classifier and sample encrypted-flow datas
 
 ## 13. Deep Assessment Levels
 
-When a model scan starts, TrustAI Sentinel now reports assessment progress by level:
+When a model scan starts, Credora now reports assessment progress by level:
 
 | Level | Assessment | What it checks |
 |---|---|---|
@@ -611,7 +611,9 @@ When a model scan starts, TrustAI Sentinel now reports assessment progress by le
 | Level 13 | Trust Drift | Compares trust score against previous scans |
 | Level 14 | Final Report | Writes the deployment decision, tailored fixes, JSON report, and DOCX report |
 
-Recommendations are generated from the actual findings. For example, if a model has weak `Suspicious` recall, the report recommends adding more labeled suspicious flows and setting a deployment recall gate. If prediction confidence is low, it recommends an abstain/manual-review threshold. If one feature dominates behavior, it recommends validating that feature and adding alternate traffic features.
+Every new report also stores a persistent `analysis_trace`. Each trace record explains the method used, exact measured evidence, module conclusion, score, status, and detected issue names. The dashboard shows these records under **Traffic Classifier -> Deep Assessment Trace**, so the reasoning remains visible after the live progress display finishes.
+
+Corrective actions are generated from the current report evidence, not selected from a recommendation checkbox. Each `remediation_plan` item contains a priority, evidence, diagnosis, required change, and measurable retest condition. For example, a `Suspicious -> VPN` confusion names the affected classes and observed flow count, drift remediation names the highest-PSI features, and adversarial remediation names the actual worst-case scenario. The legitimate and evasive model reports therefore receive different corrective plans.
 
 ---
 
@@ -619,9 +621,9 @@ Recommendations are generated from the actual findings. For example, if a model 
 
 Phase 3 is complete for the project scope. The scanner now covers pre-deployment assessment and post-deployment operational monitoring.
 
-The latest local release gate for the normal classifier scores `97.0/100`. Every mandatory score and integrity check passes, but a raw `.joblib` artifact remains **conditional** because pickle-family files must never be loaded from an untrusted source. The signed `.trustai` packaging workflow supplies the hardened, externally trusted path for release automation.
+The latest local release gate for the normal classifier scores `97.74/100`. Every mandatory score and integrity check passes, but a raw `.joblib` artifact remains **conditional** because pickle-family files must never be loaded from an untrusted source. The signed `.credora` packaging workflow supplies the hardened, externally trusted path for release automation.
 
-The real-model evasive validation profile scores `61.70/100` and is **blocked**. It produces `0.0` recall for `Suspicious`, confuses all 75 suspicious flows as `VPN`, detects high drift across all eight model features, and fails five production gate checks. This proves the scanner produces materially different evidence and fixes when model behavior becomes unsafe.
+The real-model evasive validation profile scores `62.03/100` and is **blocked**. It produces `0.0` recall for `Suspicious`, confuses all 75 suspicious flows as `VPN`, detects high drift across all eight model features, and fails five production gate checks. This proves the scanner produces materially different evidence and fixes when model behavior becomes unsafe.
 
 Completed Phase 3 operational milestones:
 
@@ -639,7 +641,7 @@ Phase 4 remains responsible for signing and independently verifying final trust 
 
 ## 15. Real-Time Environment Note
 
-The included real-time probe is a live simulation using encrypted-flow metadata. For captured traffic, use the Phase 3 Zeek/CICFlowMeter ingestion workflow; TrustAI Sentinel consumes collector output and does not sniff or decrypt packets itself.
+The included real-time probe is a live simulation using encrypted-flow metadata. For captured traffic, use the Phase 3 Zeek/CICFlowMeter ingestion workflow; Credora consumes collector output and does not sniff or decrypt packets itself.
 
 For a real network environment, capture encrypted traffic with a flow generator such as Zeek, CICFlowMeter, or another packet-to-flow tool, then convert each flow into these model features:
 

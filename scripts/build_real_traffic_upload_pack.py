@@ -129,7 +129,7 @@ def build_pipeline(X: pd.DataFrame, random_state: int) -> Pipeline:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build a real encrypted-traffic upload pack for TrustAI Sentinel.")
+    parser = argparse.ArgumentParser(description="Build a real encrypted-traffic upload pack for Credora.")
     parser.add_argument("--source-csv", required=True, help="Path to the downloaded public encrypted traffic CSV.")
     parser.add_argument("--label-column", default=None, help="Optional label column name if auto-detection fails.")
     parser.add_argument("--model-name", default="cic_vpn_real_rf_v1", help="Output model name.")

@@ -30,7 +30,7 @@ from modules.phase3_operations.m8_production_monitoring.monitor import monitor_r
 from scripts.run_phase1_scan import run_phase1_scan
 
 
-st.set_page_config(page_title="TrustAI Sentinel", page_icon="shield", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="expanded")
 
 TEAL = "#078b7e"
 NAVY = "#061b3d"
@@ -416,9 +416,25 @@ def render_page_head(title: str, subtitle: str) -> None:
     )
 
 
-def render_finding(finding: dict) -> None:
+def remediation_for_finding(finding: dict, remediation_plan: list[dict] | None = None) -> dict | None:
+    for item in remediation_plan or []:
+        if finding.get("title") in item.get("finding_titles", []):
+            return item
+    if finding.get("module") == "trust_score":
+        gate_item = next((item for item in remediation_plan or [] if item.get("module") == "deployment_gate"), None)
+        if gate_item:
+            return gate_item
+    return next(
+        (item for item in remediation_plan or [] if item.get("module") == finding.get("module")),
+        None,
+    )
+
+
+def render_finding(finding: dict, remediation_plan: list[dict] | None = None) -> None:
     severity = finding.get("severity", "info")
-    recommendation = finding.get("recommendation") or "No corrective action is required."
+    remediation = remediation_for_finding(finding, remediation_plan)
+    recommendation = (remediation or {}).get("fix") or finding.get("recommendation") or "No corrective action is required."
+    validation = (remediation or {}).get("validation")
     st.markdown(
         f"""
         <div class="finding {h(severity)}">
@@ -429,6 +445,8 @@ def render_finding(finding: dict) -> None:
         """,
         unsafe_allow_html=True,
     )
+    if validation:
+        st.caption(f"Retest condition: {validation}")
 
 
 def resolve_report(selected_model: str | None) -> dict | None:
@@ -463,7 +481,7 @@ def update_setting(setting_key: str, control_key: str) -> None:
 
 with st.sidebar:
     st.markdown(
-        "<div class='brand'><div class='brand-mark'>|</div><div>TrustAI Sentinel</div></div>",
+        "<div class='brand'><div class='brand-mark'>|</div><div>Credora</div></div>",
         unsafe_allow_html=True,
     )
     page = st.radio(
@@ -525,7 +543,7 @@ with st.sidebar:
     sidebar_scan_history = list_scans(limit=100)
     sidebar_model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in sidebar_scan_history]))
     selected_model = st.selectbox("Active assessment", sidebar_model_names) if sidebar_model_names else None
-    st.caption("TrustAI Sentinel v2.0")
+    st.caption("Credora v2.0")
 
 
 if page == "Overview":
@@ -551,7 +569,7 @@ if run_scan:
     progress_bar = st.progress(0, text="Preparing assessment")
     progress_panel = st.empty()
     progress_events: list[dict[str, str]] = []
-    assessment_total = 15
+    assessment_total = 30
 
     def render_progress(level: str, message: str) -> None:
         progress_events.append({"level": level, "message": message})
@@ -609,6 +627,8 @@ trust_score = safe_score(report_data.get("trust_score"))
 counts = severity_counts(report_data)
 findings = all_findings(report_data)
 action_findings = [item for item in findings if item.get("severity") != "info"]
+analysis_trace = report_data.get("analysis_trace", [])
+remediation_plan = report_data.get("remediation_plan", [])
 generated_at = report_data.get("generated_at", "not generated")
 model_name = report_data.get("model_name", "Unknown model")
 f1_pct = safe_score(classifier_details.get("f1_score")) * 100
@@ -778,6 +798,23 @@ elif page == "Model Registry":
 
 elif page == "Traffic Classifier":
     render_page_head("Traffic Classifier", "Class behavior, prediction quality, confidence, and feature reliance")
+    st.markdown("### Deep Assessment Trace")
+    st.caption("Open any completed step to see the method used, the exact evidence observed, and the conclusion reached.")
+    if analysis_trace:
+        for step in analysis_trace:
+            label = module_label(str(step.get("module", "assessment")))
+            with st.expander(
+                f"Step {step.get('step', '')} | {label} | {safe_score(step.get('score')):.1f}/100 | {str(step.get('status', 'unknown')).upper()}"
+            ):
+                st.markdown(f"**What Credora did:** {step.get('method', '')}")
+                st.markdown(f"**Evidence observed:** {step.get('evidence', '')}")
+                st.markdown(f"**Conclusion:** {step.get('conclusion', '')}")
+                issues = step.get("issue_titles", [])
+                if issues:
+                    st.markdown(f"**Issues detected:** {', '.join(map(str, issues))}")
+    else:
+        st.info("This is a legacy report. Run the model again to generate the persistent deep-analysis trace.")
+
     metric_df = pd.DataFrame([
         {"Metric": "Accuracy", "Value": safe_score(classifier_details.get("accuracy"))},
         {"Metric": "Precision", "Value": safe_score(classifier_details.get("precision"))},
@@ -828,7 +865,7 @@ elif page == "Traffic Classifier":
                 class_df = pd.DataFrame(class_metrics).T.reset_index().rename(columns={"index": "Class"})
                 st.dataframe(class_df, hide_index=True, width="stretch")
             for item in behavior.get("findings", []):
-                render_finding(item)
+                render_finding(item, remediation_plan)
 
     st.markdown("### Phase 3 Production Validation")
     p1, p2, p3, p4 = st.columns(4)
@@ -1020,13 +1057,26 @@ elif page == "Reports":
                 st.download_button("Download DOCX report", docx_path.read_bytes(), file_name=docx_path.name, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width="stretch")
     with right:
         with st.container(border=True):
-            st.markdown("### Deployment Recommendations")
-            recommendations = report_data.get("recommendations", [])
-            if recommendations:
-                for recommendation in recommendations:
-                    st.checkbox(recommendation, value=False)
+            st.markdown("### Model-Specific Remediation Plan")
+            st.caption("These actions are generated from this assessment's measured evidence; they are not selectable suggestions.")
+            if remediation_plan:
+                for item in remediation_plan:
+                    st.markdown(f"**{h(item.get('id', 'FIX'))} | {h(item.get('priority', 'P2'))} | {h(item.get('title', 'Corrective action'))}**")
+                    st.markdown(f"**Evidence:** {h(item.get('evidence', ''))}")
+                    st.markdown(f"**Diagnosis:** {h(item.get('diagnosis', ''))}")
+                    st.markdown(f"**Required change:** {h(item.get('fix', ''))}")
+                    st.markdown(f"**Retest condition:** {h(item.get('validation', ''))}")
+                    st.divider()
             else:
                 st.success("No corrective actions are required by this assessment.")
+    with st.expander("Deep assessment evidence", expanded=False):
+        if analysis_trace:
+            for step in analysis_trace:
+                st.markdown(f"**Step {step.get('step', '')}: {h(module_label(str(step.get('module', ''))))}**")
+                st.write(step.get("method", ""))
+                st.caption(step.get("evidence", ""))
+        else:
+            st.info("Run this model again to add a deep-analysis trace to the report.")
     with st.expander("Raw assessment JSON"):
         st.json(report_data)
 
@@ -1041,7 +1091,7 @@ elif page == "Alerts":
     selected_findings = [item for item in findings if item.get("severity", "info") in selected]
     if selected_findings:
         for item in selected_findings:
-            render_finding(item)
+            render_finding(item, remediation_plan)
     else:
         st.success("No findings match the selected severity levels.")
     st.markdown("### Production Monitoring Alerts")
@@ -1069,7 +1119,7 @@ else:
     with st.container(border=True):
         st.markdown("### Scanner Policy")
         st.markdown(
-            "TrustAI Sentinel runs integrity, dependency, classifier performance, robustness, drift, explainability, behavior, adversarial, runtime-integrity, deployment-gate, and trust-history checks. "
+            "Credora runs integrity, dependency, classifier performance, robustness, drift, explainability, behavior, adversarial, runtime-integrity, deployment-gate, and trust-history checks. "
             "Use **Upload & Analyze Model** in the sidebar to assess the bundled classifier or your own assessment pack."
         )
         st.toggle(

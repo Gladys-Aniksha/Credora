@@ -1,4 +1,4 @@
-﻿# TrustAI Sentinel - Phase 1
+﻿# Credora - Phase 1
 
 Phase 1 is the working prototype for evaluating whether an encrypted traffic classifier model is safe enough to deploy.
 

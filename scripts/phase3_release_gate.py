@@ -57,7 +57,7 @@ def main() -> None:
 
     if bool(args.package) != bool(args.trust_key):
         parser.error("--package and --trust-key must be supplied together")
-    with TemporaryDirectory(prefix="trustai-release-") as temp_dir:
+    with TemporaryDirectory(prefix="credora-release-") as temp_dir:
         if args.package:
             verified = verify_model_package(args.package, args.trust_key, temp_dir)
             model, metadata, requirements = verified.model_path, verified.metadata_path, verified.requirements_path

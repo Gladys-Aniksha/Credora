@@ -21,4 +21,4 @@ jobs:
       - name: Run Phase 3 model release gate
         run: python scripts/phase3_release_gate.py --minimum-score 85
       - name: Build production container
-        run: docker build --tag trustai-sentinel:${{ github.sha }} .
+        run: docker build --tag credora:${{ github.sha }} .
