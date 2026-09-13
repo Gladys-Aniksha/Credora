@@ -10,7 +10,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.model_package import verify_model_package
 from scripts.run_phase1_scan import run_phase1_scan
 
 
@@ -28,8 +27,16 @@ def run_gate(
     metadata: Path,
     minimum_score: float,
     require_approved: bool,
+    trust_key: Path | None = None,
 ) -> tuple[dict, bool]:
-    report = run_phase1_scan(model, dataset, requirements, metadata, generate_docx=False).to_dict()
+    report = run_phase1_scan(
+        model,
+        dataset,
+        requirements,
+        metadata,
+        trusted_public_key_path=trust_key,
+        generate_docx=False,
+    ).to_dict()
     decision = deployment_decision(report)
     allowed_decisions = {"approved"} if require_approved else {"approved", "conditional"}
     passed = float(report.get("trust_score", 0)) >= minimum_score and decision in allowed_decisions
@@ -57,13 +64,26 @@ def main() -> None:
 
     if bool(args.package) != bool(args.trust_key):
         parser.error("--package and --trust-key must be supplied together")
-    with TemporaryDirectory(prefix="credora-release-") as temp_dir:
+    with TemporaryDirectory(prefix="credora-release-"):
         if args.package:
-            verified = verify_model_package(args.package, args.trust_key, temp_dir)
-            model, metadata, requirements = verified.model_path, verified.metadata_path, verified.requirements_path
+            model = args.package
+            metadata = args.metadata
+            requirements = args.requirements
+            trust_key = args.trust_key
         else:
-            model, metadata, requirements = args.model, args.metadata, args.requirements
-        summary, passed = run_gate(model, args.dataset, requirements, metadata, args.minimum_score, args.require_approved)
+            model = args.model
+            metadata = args.metadata
+            requirements = args.requirements
+            trust_key = None
+        summary, passed = run_gate(
+            model,
+            args.dataset,
+            requirements,
+            metadata,
+            args.minimum_score,
+            args.require_approved,
+            trust_key,
+        )
     print(json.dumps(summary, indent=2))
     raise SystemExit(0 if passed else 2)
 
