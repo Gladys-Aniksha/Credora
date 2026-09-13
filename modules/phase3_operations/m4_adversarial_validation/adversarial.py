@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score, recall_score
 
+from core.model_loading import load_checked_model
 from core.report_schema import Finding, ModuleResult
 
 
@@ -87,7 +87,7 @@ def run_adversarial_validation(
 ) -> ModuleResult:
     metadata = metadata or {}
     try:
-        model = joblib.load(model_path)
+        model = load_checked_model(model_path)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(

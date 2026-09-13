@@ -266,7 +266,7 @@ def build_remediation_plan(results: list[ModuleResult], model_name: str, metadat
         if finding.severity != "info"
     ]
     if artifact_findings:
-        sha256 = verification.details.get("sha256") if verification else metadata.get("sha256")
+        sha256 = verification.details.get("sha256") if verification else None
         extension = verification.details.get("extension") if verification else "unknown"
         plan.append(_plan_item(
             "P0" if any(finding.severity in {"critical", "high"} for finding in artifact_findings) else "P1",

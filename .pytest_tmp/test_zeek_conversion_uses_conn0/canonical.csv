@@ -1,0 +1,2 @@
+flow_duration,packet_count,avg_packet_size,bytes_sent,bytes_received,iat_mean,iat_std,flow_bytes_per_second
+2000.0,10,150.0,1000,500,0.2222222222222222,0.0,750.0

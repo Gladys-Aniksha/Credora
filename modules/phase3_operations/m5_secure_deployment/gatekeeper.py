@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.config import DEFAULT_DEPLOYMENT_POLICY
 from core.report_schema import Finding, ModuleResult
 
 
@@ -11,7 +12,7 @@ def evaluate_deployment_gate(
     results: list[ModuleResult], preliminary_trust_score: float, metadata: dict | None = None
 ) -> ModuleResult:
     metadata = metadata or {}
-    policy = metadata.get("deployment_policy", {})
+    policy = DEFAULT_DEPLOYMENT_POLICY
     trust_target = float(policy.get("minimum_trust_score", 85))
     classifier_target = float(policy.get("minimum_classifier_score", 85))
     adversarial_target = float(policy.get("minimum_adversarial_score", 80))
@@ -24,6 +25,15 @@ def evaluate_deployment_gate(
     high_risk = [finding for finding in all_findings if finding.severity in {"critical", "high"}]
     medium_risk = [finding for finding in all_findings if finding.severity == "medium"]
     sensitive_recall = adversarial.details.get("worst_sensitive_recall") if adversarial else None
+    policy_findings: list[Finding] = []
+    if metadata.get("deployment_policy"):
+        policy_findings.append(Finding(
+            "deployment_gate",
+            "Self-reported deployment policy ignored",
+            "info",
+            "The uploaded metadata included deployment_policy thresholds, but Credora uses server-side policy for gate decisions.",
+            "Configure deployment thresholds on the server, not in uploaded metadata.",
+        ))
 
     checks = [
         {"check": "Trust score", "passed": preliminary_trust_score >= trust_target, "actual": round(preliminary_trust_score, 2), "target": trust_target, "required": True},
@@ -62,7 +72,7 @@ def evaluate_deployment_gate(
         status=status,
         score=gate_score,
         summary=summary,
-        findings=[Finding("deployment_gate", f"Deployment {decision}", severity, description, recommendation)],
+        findings=[Finding("deployment_gate", f"Deployment {decision}", severity, description, recommendation), *policy_findings],
         details={
             "decision": decision,
             "checks": checks,

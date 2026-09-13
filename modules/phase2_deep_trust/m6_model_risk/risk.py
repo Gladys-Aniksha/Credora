@@ -39,9 +39,18 @@ def analyze_model_risk(model_path: str | Path, metadata: dict | None = None) -> 
     if not expected_features:
         score -= 12
         findings.append(Finding("model_risk_analyzer", "Expected feature list missing", "medium", "The system cannot strictly validate dataset/model feature compatibility.", "Add expected_features to metadata.json."))
-    if metadata.get("signature_status") != "valid":
+    if metadata.get("_signature_verified") is not True:
         score -= 10
-        findings.append(Finding("model_risk_analyzer", "Model signature not valid", "medium", "Metadata does not prove that the model artifact was signed.", "Add artifact signing in the deployment pipeline."))
+        findings.append(Finding("model_risk_analyzer", "Model signature not verified", "medium", "Credora did not verify an Ed25519 package signature for this artifact.", "Scan a signed .credora package before deployment approval."))
+
+    if metadata.get("signature_status") == "valid" and metadata.get("_signature_verified") is not True:
+        findings.append(Finding(
+            "model_risk_analyzer",
+            "Self-reported signature ignored",
+            "info",
+            "The uploaded metadata claims signature_status=valid, but this field is not used as signature evidence.",
+            "Use Credora package verification so signature validity is set internally.",
+        ))
 
     if not findings:
         findings.append(Finding("model_risk_analyzer", "No major model risk indicators", "info", "Artifact metadata, size, and format are acceptable for the current prototype."))
@@ -54,5 +63,12 @@ def analyze_model_risk(model_path: str | Path, metadata: dict | None = None) -> 
         score=score,
         summary="Checked artifact-level model deployment risk indicators.",
         findings=findings,
-        details={"file_name": path.name, "extension": extension, "size_mb": round(size_mb, 3), "metadata_fields": sorted(metadata.keys()), "expected_feature_count": len(expected_features)},
+        details={
+            "file_name": path.name,
+            "extension": extension,
+            "size_mb": round(size_mb, 3),
+            "metadata_fields": sorted(key for key in metadata.keys() if not key.startswith("_")),
+            "expected_feature_count": len(expected_features),
+            "signature_verified": metadata.get("_signature_verified") is True,
+        },
     )

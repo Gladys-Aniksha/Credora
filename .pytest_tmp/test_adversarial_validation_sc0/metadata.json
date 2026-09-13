@@ -1,0 +1,26 @@
+{
+  "model_name": "traffic_rf_v1_evasion_probe",
+  "version": "1.0-phase3-evasion",
+  "algorithm": "Random Forest",
+  "framework": "scikit-learn",
+  "task": "Encrypted Traffic Classification",
+  "target_column": "label",
+  "training_dataset_path": "data/processed/encrypted_traffic_train.csv",
+  "expected_features": [
+    "flow_duration",
+    "packet_count",
+    "avg_packet_size",
+    "bytes_sent",
+    "bytes_received",
+    "iat_mean",
+    "iat_std",
+    "flow_bytes_per_second"
+  ],
+  "class_labels": [
+    "Normal",
+    "VPN",
+    "Suspicious"
+  ],
+  "demo_f1_score": 1.0,
+  "validation_profile": "phase3_sensitive_flow_evasion"
+}

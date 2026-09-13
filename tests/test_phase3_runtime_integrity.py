@@ -7,7 +7,7 @@ from modules.phase3_operations.m6_runtime_integrity.watcher import check_runtime
 def test_runtime_integrity_accepts_approved_hash(tmp_path) -> None:
     model = tmp_path / "model.joblib"
     model.write_bytes(b"approved-model-artifact")
-    result = check_runtime_integrity(model, {"sha256": sha256_file(model), "signature_status": "valid"})
+    result = check_runtime_integrity(model, {"_expected_sha256": sha256_file(model), "_signature_verified": True})
     assert result.status == "pass"
     assert result.details["integrity_state"] == "verified"
 
@@ -15,6 +15,6 @@ def test_runtime_integrity_accepts_approved_hash(tmp_path) -> None:
 def test_runtime_integrity_blocks_hash_change(tmp_path) -> None:
     model = tmp_path / "model.joblib"
     model.write_bytes(b"changed-model-artifact")
-    result = check_runtime_integrity(model, {"sha256": "0" * 64, "signature_status": "valid"})
+    result = check_runtime_integrity(model, {"_expected_sha256": "0" * 64, "_signature_verified": True})
     assert result.status == "fail"
     assert any(finding.severity == "critical" for finding in result.findings)

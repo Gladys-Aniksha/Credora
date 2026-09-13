@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
 
+from core.model_loading import load_checked_model
 from core.report_schema import Finding, ModuleResult
 
 
@@ -17,7 +17,7 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
     data_file = Path(dataset_path)
 
     try:
-        model = joblib.load(model_file)
+        model = load_checked_model(model_file)
         data = pd.read_csv(data_file)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("robustness_testing", "fail", 0, "Robustness test could not run.", [Finding("robustness_testing", "Robustness test failed", "high", str(exc), "Verify that model and CSV files are compatible.")])

@@ -17,8 +17,8 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
         )
 
     actual_hash = sha256_file(path)
-    expected_hash = metadata.get("sha256")
-    signature_valid = metadata.get("signature_status") == "valid"
+    expected_hash = metadata.get("_expected_sha256")
+    signature_valid = metadata.get("_signature_verified") is True
     findings: list[Finding] = []
     score = 100.0
 
@@ -34,7 +34,7 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
         findings.append(Finding(
             "runtime_integrity", "No approved runtime hash", "high",
             "Runtime monitoring has no approved hash to compare with the deployed model.",
-            "Store the reviewed model SHA-256 in signed metadata before deployment.",
+            "Register the reviewed model hash server-side or scan a signed Credora package before deployment.",
         ))
     else:
         findings.append(Finding(
@@ -47,8 +47,8 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
         score -= 20
         findings.append(Finding(
             "runtime_integrity", "Runtime signature evidence missing", "medium",
-            "Metadata does not mark the deployed artifact signature as valid.",
-            "Sign the model manifest and verify the signature before starting the model service.",
+            "Credora did not verify a signed package for the deployed artifact.",
+            "Sign the model manifest and verify the package before starting the model service.",
         ))
 
     score = round(max(0.0, score), 2)
@@ -62,6 +62,7 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
             "model_path": str(path.resolve()),
             "actual_sha256": actual_hash,
             "expected_sha256": expected_hash,
+            "expected_sha256_source": metadata.get("_expected_sha256_source", "none"),
             "signature_valid": signature_valid,
             "file_size_bytes": path.stat().st_size,
             "file_modified_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),

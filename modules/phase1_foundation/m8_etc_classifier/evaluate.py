@@ -2,9 +2,9 @@
 
 import json
 from pathlib import Path
-import joblib
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, precision_score, recall_score
+from core.model_loading import load_checked_model
 from core.report_schema import Finding, ModuleResult
 
 
@@ -20,7 +20,7 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
         return ModuleResult("classifier_evaluation", "fail", 0, "Dataset file not found.", [Finding("classifier_evaluation", "Missing dataset", "critical", "The test dataset was not found.")])
 
     try:
-        model = joblib.load(model_file)
+        model = load_checked_model(model_file)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("classifier_evaluation", "fail", 0, "Model could not be loaded.", [Finding("classifier_evaluation", "Model load failed", "critical", str(exc), "Use a trusted scikit-learn .joblib or .pkl model.")])
 

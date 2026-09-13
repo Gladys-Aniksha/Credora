@@ -14,7 +14,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.config import METADATA_DIR, PROCESSED_DATA_DIR, SAMPLE_MODEL_DIR, SAMPLE_REQUIREMENTS_DIR
-from core.hashing import sha256_file
 
 FEATURES = [
     "flow_duration",
@@ -83,8 +82,6 @@ def main() -> None:
         "training_dataset_path": str(train_path),
         "expected_features": FEATURES,
         "class_labels": CLASSES,
-        "signature_status": "valid",
-        "sha256": sha256_file(model_path),
         "demo_f1_score": round(float(f1), 4),
     }
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -96,7 +93,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 

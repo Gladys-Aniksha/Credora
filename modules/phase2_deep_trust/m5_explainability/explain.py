@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-import joblib
 import pandas as pd
 
+from core.model_loading import load_checked_model
 from core.report_schema import Finding, ModuleResult
 
 
@@ -21,7 +21,7 @@ def explain_model(model_path: str | Path, dataset_path: str | Path, metadata: di
     metadata = metadata or {}
     findings: list[Finding] = []
     try:
-        model = joblib.load(model_path)
+        model = load_checked_model(model_path)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("explainability", "fail", 0, "Explainability could not run.", [Finding("explainability", "Explainability failed", "high", str(exc), "Use a supported scikit-learn model with readable feature metadata.")])

@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-from core.config import RISKY_MODEL_EXTENSIONS, SUPPORTED_MODEL_EXTENSIONS
+from core.config import RISKY_MODEL_EXTENSIONS, SUPPORTED_MODEL_EXTENSIONS, verify_model_file_type
 from core.hashing import sha256_file
 from core.report_schema import Finding, ModuleResult
 
@@ -34,6 +34,15 @@ def verify_model(model_path: str | Path, metadata: dict | None = None) -> Module
             f"The file extension {extension} is not supported in Phase 1.",
             "Use a scikit-learn model saved as .joblib or .pkl.",
         ))
+    elif not verify_model_file_type(path):
+        score -= 40
+        findings.append(Finding(
+            "model_verification",
+            "Model file signature mismatch",
+            "critical",
+            "The artifact extension is supported, but its file header does not look like a pickle/joblib stream.",
+            "Reject renamed or malformed model uploads before any automatic loading.",
+        ))
 
     if extension in RISKY_MODEL_EXTENSIONS:
         score -= 10
@@ -45,27 +54,36 @@ def verify_model(model_path: str | Path, metadata: dict | None = None) -> Module
             "Only load verified models from trusted sources.",
         ))
 
-    expected_hash = metadata.get("sha256")
+    expected_hash = metadata.get("_expected_sha256")
     if expected_hash:
         if expected_hash == file_hash:
-            findings.append(Finding("model_verification", "Hash matched metadata", "info", "The model hash matches the supplied metadata."))
+            findings.append(Finding("model_verification", "Hash matched trusted baseline", "info", "The model hash matches a server-side or package-verified baseline."))
         else:
             score -= 35
             findings.append(Finding(
                 "model_verification",
                 "Hash mismatch",
                 "critical",
-                "The model hash does not match the supplied metadata.",
+                "The model hash does not match the trusted baseline.",
                 "Do not deploy until the model source is verified.",
             ))
     else:
         score -= 8
         findings.append(Finding(
             "model_verification",
-            "No expected hash supplied",
-            "low",
-            "No reference hash was provided for comparison.",
-            "Store this hash in metadata for future version checks.",
+            "No trusted hash baseline",
+            "medium",
+            "No server-side or signed-package reference hash was available for comparison.",
+            "Register or verify the model through a signed Credora package before approval.",
+        ))
+
+    if metadata.get("sha256") and metadata.get("sha256") != expected_hash:
+        findings.append(Finding(
+            "model_verification",
+            "Self-reported hash ignored",
+            "info",
+            "The uploaded metadata contains a sha256 value, but Credora does not trust upload-provided hashes for scoring.",
+            "Use the server-side registry or signed package manifest as the integrity baseline.",
         ))
 
     if not metadata.get("model_name"):
@@ -76,10 +94,10 @@ def verify_model(model_path: str | Path, metadata: dict | None = None) -> Module
         score -= 5
         findings.append(Finding("model_verification", "Missing model version", "low", "Metadata does not include version.", "Add version to metadata."))
 
-    signature_status = metadata.get("signature_status", "missing")
-    if signature_status != "valid":
+    signature_valid = metadata.get("_signature_verified") is True
+    if not signature_valid:
         score -= 10
-        findings.append(Finding("model_verification", "Missing or invalid signature", "medium", "The model metadata does not show a valid signature.", "Sign model artifacts before deployment."))
+        findings.append(Finding("model_verification", "Missing or invalid signature", "medium", "No package-verified signature was established for this model artifact.", "Sign and scan model artifacts through the Credora package flow before deployment."))
 
     score = max(0.0, min(100.0, score))
     status = "pass" if score >= 80 else "warning" if score >= 50 else "fail"
@@ -89,5 +107,12 @@ def verify_model(model_path: str | Path, metadata: dict | None = None) -> Module
         score=score,
         summary=f"Verified {path.name}; SHA256 captured and format reviewed.",
         findings=findings,
-        details={"file_name": path.name, "extension": extension, "sha256": file_hash, "size_mb": round(size_mb, 3)},
+        details={
+            "file_name": path.name,
+            "extension": extension,
+            "sha256": file_hash,
+            "size_mb": round(size_mb, 3),
+            "signature_verified": signature_valid,
+            "expected_sha256_source": metadata.get("_expected_sha256_source", "none"),
+        },
     )

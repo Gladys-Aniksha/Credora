@@ -9,9 +9,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import joblib
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, precision_score, recall_score
+
+from core.model_loading import load_checked_model
 
 
 def load_metadata(metadata_path: Path | None) -> dict:
@@ -22,7 +23,7 @@ def load_metadata(metadata_path: Path | None) -> dict:
 
 def verify_model(model_path: Path, dataset_path: Path, metadata_path: Path | None) -> dict:
     metadata = load_metadata(metadata_path)
-    model = joblib.load(model_path)
+    model = load_checked_model(model_path)
     dataset = pd.read_csv(dataset_path)
 
     target_column = metadata.get("target_column", "label")

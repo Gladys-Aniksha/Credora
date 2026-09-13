@@ -54,12 +54,9 @@ def create_shifted_pack(
     shifted_metadata["model_name"] = f"{metadata.get('model_name', 'model')}_evasion_probe"
     shifted_metadata["version"] = f"{metadata.get('version', 'unknown')}-phase3-evasion"
     shifted_metadata["validation_profile"] = "phase3_sensitive_flow_evasion"
-    shifted_metadata["deployment_policy"] = {
-        "minimum_trust_score": 85,
-        "minimum_classifier_score": 85,
-        "minimum_adversarial_score": 80,
-        "minimum_sensitive_recall": 0.90,
-    }
+    shifted_metadata.pop("signature_status", None)
+    shifted_metadata.pop("sha256", None)
+    shifted_metadata.pop("deployment_policy", None)
     shifted_metadata_path = output_dir / "metadata.json"
     shifted_metadata_path.write_text(json.dumps(shifted_metadata, indent=2), encoding="utf-8")
 

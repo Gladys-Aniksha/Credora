@@ -57,8 +57,8 @@ def test_integrity_cycle_persists_tamper_alert(tmp_path, monkeypatch) -> None:
     model.write_bytes(b"approved")
     metadata.write_text(json.dumps({
         "model_name": "runtime-model",
-        "sha256": sha256_file(model),
-        "signature_status": "valid",
+        "_expected_sha256": sha256_file(model),
+        "_signature_verified": True,
     }), encoding="utf-8")
 
     assert run_integrity_cycle(model, metadata).status == "pass"

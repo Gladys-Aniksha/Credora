@@ -12,8 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import joblib
 import pandas as pd
+
+from core.model_loading import load_checked_model
 
 
 PROFILE_RANGES = {
@@ -75,7 +76,7 @@ def main() -> None:
     metadata = load_metadata(args.metadata)
     feature_columns = metadata["expected_features"]
     class_labels = metadata.get("class_labels", list(PROFILE_RANGES))
-    model = joblib.load(args.model)
+    model = load_checked_model(args.model)
 
     print("Realtime Encrypted Traffic Classifier Probe")
     print("=" * 43)

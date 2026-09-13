@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix
 
+from core.model_loading import load_checked_model
 from core.report_schema import Finding, ModuleResult
 
 
@@ -52,7 +52,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
     findings: list[Finding] = []
 
     try:
-        model = joblib.load(model_path)
+        model = load_checked_model(model_path)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(

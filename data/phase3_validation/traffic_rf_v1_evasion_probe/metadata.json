@@ -5,7 +5,7 @@
   "framework": "scikit-learn",
   "task": "Encrypted Traffic Classification",
   "target_column": "label",
-  "training_dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_train.csv",
+  "training_dataset_path": "data/processed/encrypted_traffic_train.csv",
   "expected_features": [
     "flow_duration",
     "packet_count",
@@ -21,14 +21,6 @@
     "VPN",
     "Suspicious"
   ],
-  "signature_status": "valid",
-  "sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
   "demo_f1_score": 1.0,
-  "validation_profile": "phase3_sensitive_flow_evasion",
-  "deployment_policy": {
-    "minimum_trust_score": 85,
-    "minimum_classifier_score": 85,
-    "minimum_adversarial_score": 80,
-    "minimum_sensitive_recall": 0.9
-  }
+  "validation_profile": "phase3_sensitive_flow_evasion"
 }

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from core.config import REPORT_DIR
+from core.security import ensure_within_directory, slugify_filename
 
 
 def create_docx_report(report: Any, output_path: str | Path | None = None) -> Path:
@@ -15,7 +16,8 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
 
     report_dict = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     model_name = report_dict.get("model_name", "model")
-    path = Path(output_path) if output_path else REPORT_DIR / f"{model_name}_trust_report.docx"
+    path = Path(output_path) if output_path else REPORT_DIR / f"{slugify_filename(model_name)}_trust_report.docx"
+    path = ensure_within_directory(path, REPORT_DIR)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     doc = Document()

@@ -25,6 +25,7 @@ from core.db import (
     list_runtime_alerts,
     list_scans,
 )
+from core.security import ensure_within_directory, slugify_filename
 from modules.phase3_operations.m7_flow_ingestion.collector import ingest_flow_file
 from modules.phase3_operations.m8_production_monitoring.monitor import monitor_rolling_windows
 from scripts.run_phase1_scan import run_phase1_scan
@@ -469,7 +470,9 @@ def resolve_report(selected_model: str | None) -> dict | None:
 def persist_upload(uploaded: object, subdir: str) -> Path | None:
     if uploaded is None:
         return None
-    path = PROJECT_ROOT / "data" / "uploads" / subdir / uploaded.name
+    folder = PROJECT_ROOT / "data" / "uploads" / subdir
+    safe_name = Path(uploaded.name).name
+    path = ensure_within_directory(folder / safe_name, folder)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(uploaded.getbuffer())
     return path
@@ -939,7 +942,7 @@ elif page == "Traffic Classifier":
                     model_name=model_name,
                     captured_csv_path=canonical_path,
                     baseline_path=PROCESSED_DATA_DIR / "encrypted_traffic_train.csv",
-                    output_dir=DATA_DIR / "production_windows" / model_name,
+                    output_dir=ensure_within_directory(DATA_DIR / "production_windows" / slugify_filename(model_name), DATA_DIR),
                     window_size=int(production_window_size),
                     expected_features=classifier_details.get("feature_columns"),
                 )
@@ -1044,7 +1047,8 @@ elif page == "Trust Drift":
 elif page == "Reports":
     render_page_head("Reports", "Deployment evidence, exported assessments, and recommended actions")
     report_phase = "phase3" if deployment_gate else "phase2"
-    report_path = REPORT_DIR / f"{model_name}_{report_phase}_trust_report.json"
+    safe_model_name = slugify_filename(model_name)
+    report_path = ensure_within_directory(REPORT_DIR / f"{safe_model_name}_{report_phase}_trust_report.json", REPORT_DIR)
     left, right = st.columns([.9, 1.1])
     with left:
         with st.container(border=True):
@@ -1052,7 +1056,7 @@ elif page == "Reports":
             st.markdown(f"<div class='path-box'>{h(report_path)}</div>", unsafe_allow_html=True)
             st.caption(f"Generated {format_time(generated_at)} | Trust score {trust_score:.1f}/100")
             st.download_button("Download JSON report", json.dumps(report_data, indent=2), file_name=report_path.name, mime="application/json", width="stretch")
-            docx_path = Path(report_data.get("docx_report_path", REPORT_DIR / f"{model_name}_{report_phase}_trust_report.docx"))
+            docx_path = Path(report_data.get("docx_report_path", REPORT_DIR / f"{safe_model_name}_{report_phase}_trust_report.docx"))
             if docx_path.exists():
                 st.download_button("Download DOCX report", docx_path.read_bytes(), file_name=docx_path.name, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width="stretch")
     with right:

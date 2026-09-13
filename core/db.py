@@ -198,6 +198,16 @@ def list_models(limit: int = 25) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def latest_model_by_name(model_name: str) -> dict[str, Any] | None:
+    init_db()
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM model_registry WHERE model_name = ? ORDER BY id DESC LIMIT 1",
+            (model_name,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def list_scans(limit: int = 25) -> list[dict[str, Any]]:
     init_db()
     with connect() as conn:

@@ -5,8 +5,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from core.config import PROJECT_ROOT
+from core.config import DATA_DIR, PROJECT_ROOT
 from core.report_schema import Finding, ModuleResult
+from core.security import SecurityValidationError, ensure_within_directory, resolve_user_data_path
 
 
 def _psi(expected: pd.Series, actual: pd.Series, buckets: int = 10) -> float:
@@ -31,9 +32,24 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
     current_path = Path(current_dataset_path)
     baseline_path = metadata.get("training_dataset_path") or metadata.get("baseline_dataset_path")
     if baseline_path:
-        baseline_path = Path(baseline_path)
-        if not baseline_path.is_absolute():
-            baseline_path = PROJECT_ROOT / baseline_path
+        try:
+            baseline_path = resolve_user_data_path(baseline_path, PROJECT_ROOT)
+            baseline_path = ensure_within_directory(baseline_path, DATA_DIR)
+        except SecurityValidationError as exc:
+            return ModuleResult(
+                module="data_drift_detection",
+                status="fail",
+                score=0,
+                summary="Rejected unsafe baseline dataset path.",
+                findings=[Finding(
+                    "data_drift_detection",
+                    "Unsafe baseline dataset path",
+                    "critical",
+                    str(exc),
+                    "Use a baseline dataset stored under Credora's data directory, not an arbitrary path from uploaded metadata.",
+                )],
+                details={"baseline_dataset_path": str(baseline_path), "drifted_features": []},
+            )
     else:
         baseline_path = current_path.parents[1] / "processed" / "encrypted_traffic_train.csv"
 

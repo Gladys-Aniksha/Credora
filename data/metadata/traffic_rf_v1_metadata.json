@@ -21,7 +21,5 @@
     "VPN",
     "Suspicious"
   ],
-  "signature_status": "valid",
-  "sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
   "demo_f1_score": 1.0
 }
