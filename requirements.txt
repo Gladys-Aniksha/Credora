@@ -38,6 +38,7 @@ reportlab
 pytest
 python-docx
 passlib[bcrypt]
+bcrypt>=4.0.1,<5
 python-jose[cryptography]
 slowapi
 

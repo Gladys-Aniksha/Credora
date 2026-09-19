@@ -1,2 +1,0 @@
-flow_duration,packet_count,avg_packet_size,bytes_sent,bytes_received,iat_mean,iat_std,flow_bytes_per_second,label
-2000.0,10,300,1000,2000,0.2,0.05,1500,VPN

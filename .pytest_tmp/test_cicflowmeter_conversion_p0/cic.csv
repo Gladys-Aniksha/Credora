@@ -1,2 +1,0 @@
-Flow Duration,Total Fwd Packets,Total Backward Packets,Total Length of Fwd Packets,Total Length of Bwd Packets,Average Packet Size,Flow IAT Mean,Flow IAT Std,Flow Bytes/s,Label
-2000000,4,6,1000,2000,300,200000,50000,1500,VPN
