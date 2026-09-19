@@ -11,7 +11,9 @@ MODULE_METHODS = {
     "classifier_evaluation": "Ran the uploaded model against every labeled flow and calculated overall and per-class prediction metrics.",
     "robustness_testing": "Perturbed numeric traffic features and compared the changed predictions with the clean baseline.",
     "data_drift_detection": "Compared numeric feature distributions with the training baseline using Population Stability Index (PSI).",
-    "explainability": "Inspected native estimator feature importance to identify the traffic signals driving predictions.",
+    "explainability": "Inspected native estimator feature importance or SHAP fallback evidence to identify the traffic signals driving predictions.",
+    "dataset_leakage": "Compared the uploaded holdout with the training baseline for exact overlap and train/test performance gaps.",
+    "privacy_risk": "Compared prediction confidence on training-like and holdout rows to estimate memorization and membership-inference risk.",
     "behavior_analysis": "Examined class recall, confusion, probability confidence, and concentration of feature reliance.",
     "model_risk_analyzer": "Reviewed artifact serialization, size, metadata completeness, expected features, and signing evidence.",
     "adversarial_validation": "Re-ran inference under timing jitter, security-sensitive evasion, and sensor feature-dropout scenarios.",
@@ -75,6 +77,10 @@ def _module_evidence(result: ModuleResult) -> str:
         top = details.get("top_features", [])
         top_text = ", ".join(f"{row.get('feature')} ({_number(row.get('importance'))})" for row in top[:3])
         return f"Method: {details.get('method', 'not available')}; leading features: {top_text or 'not available'}."
+    if module == "dataset_leakage":
+        return f"Feature overlap {_number(details.get('feature_overlap_rate'))}; full-row overlap {_number(details.get('full_row_overlap_rate'))}; train F1 {_number(details.get('train_f1'))}; test F1 {_number(details.get('test_f1'))}; generalization gap {_number(details.get('generalization_gap'))}."
+    if module == "privacy_risk":
+        return f"Train mean confidence {_number(details.get('train_mean_confidence'))}; test mean confidence {_number(details.get('test_mean_confidence'))}; confidence gap {_number(details.get('confidence_gap'))}; high-confidence gap {_number(details.get('high_confidence_gap'))}."
     if module == "behavior_analysis":
         confidence = details.get("confidence", {})
         weak = details.get("weak_classes", [])
@@ -185,6 +191,33 @@ def build_remediation_plan(results: list[ModuleResult], model_name: str, metadat
             f"Validate capture units and preprocessing for {', '.join(features) or 'the drifted features'}, label a representative recent traffic window, and retrain or recalibrate with that window instead of mixing unverified shifted data into training.",
             "Rerun PSI on a separate recent window; every release-critical feature should be below 0.25 and classifier performance must remain above its gate threshold.",
             [finding.title for finding in drift.findings if finding.severity != "info"],
+        ))
+
+    leakage = by_module.get("dataset_leakage")
+    if leakage and leakage.status != "pass":
+        details = leakage.details
+        plan.append(_plan_item(
+            "P0" if leakage.status == "fail" else "P1",
+            "dataset_leakage",
+            "Rebuild the holdout split before trusting accuracy",
+            _module_evidence(leakage),
+            "The uploaded evaluation data may not be independent enough to support the reported accuracy claim.",
+            "Create a fresh holdout from raw traffic using time-aware or source-aware splitting, remove duplicate feature rows, lock the file, and rerun the scan without reusing training rows.",
+            "Approve the accuracy claim only when exact overlap is 0%, the train/test F1 gap is below 0.05, and the same result holds on a recent untouched traffic window.",
+            [finding.title for finding in leakage.findings if finding.severity != "info"],
+        ))
+
+    privacy = by_module.get("privacy_risk")
+    if privacy and privacy.status != "pass":
+        plan.append(_plan_item(
+            "P1" if privacy.status == "warning" else "P0",
+            "privacy_risk",
+            "Reduce memorization and verify privacy risk",
+            _module_evidence(privacy),
+            "The model shows a train-vs-holdout confidence pattern that can make membership inference easier or leaves privacy risk unmeasured.",
+            "Calibrate probability outputs, reduce overfitting with stronger regularization or pruning, and rerun a privacy audit with training and holdout baselines before deployment.",
+            "The confidence gap should be below 0.04, high-confidence gap below 0.10, and privacy findings should be pass or explicitly accepted with evidence.",
+            [finding.title for finding in privacy.findings if finding.severity != "info"],
         ))
 
     if behavior:
@@ -311,3 +344,4 @@ def build_remediation_plan(results: list[ModuleResult], model_name: str, metadat
     for index, item in enumerate(plan, start=1):
         item["id"] = f"FIX-{index:02d}"
     return plan
+

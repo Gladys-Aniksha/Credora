@@ -16,6 +16,7 @@ def monitor_drift_window(
     baseline_path: str | Path,
     window_label: str,
     expected_features: list[str] | None = None,
+    owner_id: int | None = None,
 ) -> ModuleResult:
     window = Path(window_path)
     frame = pd.read_csv(window)
@@ -32,6 +33,7 @@ def monitor_drift_window(
         source_path=window,
         row_count=len(frame),
         result=result,
+        owner_id=owner_id,
     )
     if result.status != "pass":
         finding = next((item for item in result.findings if item.severity != "info"), None)
@@ -44,6 +46,7 @@ def monitor_drift_window(
             model_name=model_name,
             details={"window_label": window_label, **result.details},
             dedupe_key=f"drift:{model_name}:{window_label}:{result.status}",
+            owner_id=owner_id,
         )
     return result
 
@@ -57,6 +60,7 @@ def monitor_rolling_windows(
     window_size: int = 250,
     step_size: int | None = None,
     expected_features: list[str] | None = None,
+    owner_id: int | None = None,
 ) -> list[ModuleResult]:
     if window_size <= 0:
         raise ValueError("window_size must be positive")
@@ -81,6 +85,8 @@ def monitor_rolling_windows(
                 baseline_path=baseline_path,
                 window_label=label,
                 expected_features=expected_features,
+                owner_id=owner_id,
             )
         )
     return results
+

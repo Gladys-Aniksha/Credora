@@ -11,11 +11,11 @@ from core.report_schema import ModuleResult
 from modules.phase3_operations.m6_runtime_integrity.watcher import check_runtime_integrity
 
 
-def run_integrity_cycle(model_path: str | Path, metadata_path: str | Path) -> ModuleResult:
+def run_integrity_cycle(model_path: str | Path, metadata_path: str | Path, owner_id: int | None = None) -> ModuleResult:
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     model_name = metadata.get("model_name") or Path(model_path).stem
     result = check_runtime_integrity(model_path, metadata)
-    save_integrity_check(model_name, result)
+    save_integrity_check(model_name, result, owner_id=owner_id)
     if result.status != "pass":
         finding = next((item for item in result.findings if item.severity in {"critical", "high", "medium"}), None)
         details = result.details
@@ -28,6 +28,7 @@ def run_integrity_cycle(model_path: str | Path, metadata_path: str | Path) -> Mo
             model_name=model_name,
             details=details,
             dedupe_key=f"integrity:{model_name}:{details.get('actual_sha256')}:{result.status}",
+            owner_id=owner_id,
         )
     return result
 
@@ -39,6 +40,7 @@ def monitor_runtime_integrity(
     max_checks: int | None = None,
     stop_event: Event | None = None,
     on_check: Callable[[ModuleResult], None] | None = None,
+    owner_id: int | None = None,
 ) -> list[ModuleResult]:
     if interval_seconds < 0:
         raise ValueError("interval_seconds cannot be negative")
@@ -47,7 +49,7 @@ def monitor_runtime_integrity(
     while max_checks is None or completed < max_checks:
         if stop_event and stop_event.is_set():
             break
-        result = run_integrity_cycle(model_path, metadata_path)
+        result = run_integrity_cycle(model_path, metadata_path, owner_id=owner_id)
         results.append(result)
         completed += 1
         if on_check:
@@ -59,3 +61,4 @@ def monitor_runtime_integrity(
         else:
             time.sleep(interval_seconds)
     return results
+

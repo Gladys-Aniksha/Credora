@@ -1,19 +1,22 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
+from core.db import get_trust_weights
 from core.report_schema import Finding, ModuleResult
 
 WEIGHTS = {
-    "model_verification": 0.12,
-    "dependency_scanner": 0.08,
-    "classifier_evaluation": 0.18,
-    "robustness_testing": 0.10,
-    "data_drift_detection": 0.08,
-    "explainability": 0.05,
-    "behavior_analysis": 0.10,
-    "model_risk_analyzer": 0.07,
-    "adversarial_validation": 0.12,
-    "runtime_integrity": 0.08,
-    "deployment_gate": 0.08,
+    "model_verification": 0.09,
+    "dependency_scanner": 0.06,
+    "classifier_evaluation": 0.13,
+    "robustness_testing": 0.08,
+    "data_drift_detection": 0.07,
+    "explainability": 0.07,
+    "dataset_leakage": 0.08,
+    "privacy_risk": 0.07,
+    "behavior_analysis": 0.08,
+    "model_risk_analyzer": 0.05,
+    "adversarial_validation": 0.09,
+    "runtime_integrity": 0.06,
+    "deployment_gate": 0.05,
     "trust_drift_timeline": 0.02,
 }
 
@@ -24,7 +27,8 @@ def calculate_trust_score(results: list[ModuleResult]) -> ModuleResult:
     total_weight = 0.0
     findings: list[Finding] = []
 
-    for module, weight in WEIGHTS.items():
+    active_weights = get_trust_weights()
+    for module, weight in active_weights.items():
         result = by_module.get(module)
         if result is None:
             findings.append(Finding("trust_score", f"Missing {module}", "medium", f"{module} did not run.", "Run the full trust scan."))
@@ -64,5 +68,8 @@ def calculate_trust_score(results: list[ModuleResult]) -> ModuleResult:
         score=round(final_score, 2),
         summary=summary,
         findings=findings,
-        details={"weights": WEIGHTS, "modules_scored": list(by_module.keys()), "deployment_decision": gate_decision},
+        details={"weights": active_weights, "modules_scored": list(by_module.keys()), "deployment_decision": gate_decision},
     )
+
+
+

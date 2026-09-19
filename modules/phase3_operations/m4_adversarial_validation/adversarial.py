@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score, recall_score
 
+from core.db import get_sensitive_label_taxonomy
 from core.model_loading import load_checked_model
 from core.report_schema import Finding, ModuleResult
 
@@ -109,7 +110,8 @@ def run_adversarial_validation(
     baseline_pred = pd.Series(model.predict(x_test)).astype(str)
     baseline_f1 = float(f1_score(y_true, baseline_pred, average="weighted", zero_division=0))
     labels = [str(label) for label in (metadata.get("class_labels") or sorted(y_true.unique().tolist()))]
-    sensitive_labels = [label for label in labels if any(hint in label.lower() for hint in SENSITIVE_LABEL_HINTS)]
+    sensitive_hints = get_sensitive_label_taxonomy() or SENSITIVE_LABEL_HINTS
+    sensitive_labels = [label for label in labels if any(hint in label.lower() for hint in sensitive_hints)]
     baseline_sensitive_recall = _sensitive_recall(y_true, baseline_pred, sensitive_labels)
 
     scenarios = []
@@ -187,3 +189,4 @@ def run_adversarial_validation(
             "scenarios": scenarios,
         },
     )
+

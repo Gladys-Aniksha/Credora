@@ -1,11 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from core.db import list_scans
 from core.report_schema import Finding, ModuleResult
 
 
-def analyze_trust_drift(current_score: float, model_name: str) -> ModuleResult:
-    scans = [scan for scan in list_scans(limit=50) if scan.get("model_name") == model_name]
+def analyze_trust_drift(current_score: float, model_name: str, owner_id: int | None = None) -> ModuleResult:
+    scans = [scan for scan in list_scans(limit=50, owner_id=owner_id) if scan.get("model_name") == model_name]
     findings: list[Finding] = []
 
     previous_scores = [float(scan.get("trust_score", 0)) for scan in scans]
@@ -39,3 +39,4 @@ def analyze_trust_drift(current_score: float, model_name: str) -> ModuleResult:
         findings=findings,
         details={"previous_scan_count": len(previous_scores), "previous_latest_score": previous_latest, "previous_best_score": previous_best, "drop_from_latest": drop_from_latest, "drop_from_best": drop_from_best},
     )
+

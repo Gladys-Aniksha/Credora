@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.config import DEFAULT_DEPLOYMENT_POLICY
+from core.db import get_deployment_policy
 from core.report_schema import Finding, ModuleResult
 
 
@@ -12,7 +12,7 @@ def evaluate_deployment_gate(
     results: list[ModuleResult], preliminary_trust_score: float, metadata: dict | None = None
 ) -> ModuleResult:
     metadata = metadata or {}
-    policy = DEFAULT_DEPLOYMENT_POLICY
+    policy = get_deployment_policy()
     trust_target = float(policy.get("minimum_trust_score", 85))
     classifier_target = float(policy.get("minimum_classifier_score", 85))
     adversarial_target = float(policy.get("minimum_adversarial_score", 80))
@@ -87,3 +87,4 @@ def evaluate_deployment_gate(
             },
         },
     )
+

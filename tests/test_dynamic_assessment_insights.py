@@ -82,3 +82,33 @@ def test_analysis_trace_records_method_evidence_and_conclusion() -> None:
     assert "every labeled flow" in trace[0]["method"]
     assert "weighted F1 0.97" in trace[0]["evidence"]
     assert trace[0]["conclusion"] == "Classifier performance is strong."
+
+
+def test_phase2_leakage_and_privacy_generate_specific_remediation() -> None:
+    results = [
+        ModuleResult(
+            "dataset_leakage",
+            "warning",
+            70,
+            "Compared train and test rows.",
+            [Finding("dataset_leakage", "Small train/test overlap detected", "medium", "Overlap found.")],
+            {"feature_overlap_rate": 0.12, "full_row_overlap_rate": 0.08, "train_f1": 1.0, "test_f1": 0.82, "generalization_gap": 0.18},
+        ),
+        ModuleResult(
+            "privacy_risk",
+            "warning",
+            74,
+            "Compared confidence.",
+            [Finding("privacy_risk", "Moderate memorization signal", "medium", "Confidence gap found.")],
+            {"train_mean_confidence": 0.98, "test_mean_confidence": 0.90, "confidence_gap": 0.08, "high_confidence_gap": 0.14},
+        ),
+    ]
+
+    trace = build_analysis_trace(results)
+    plan = build_remediation_plan(results, "traffic_rf_v1")
+    combined = " ".join(f"{item['title']} {item['fix']} {item['validation']}" for item in plan)
+
+    assert any(step["module"] == "dataset_leakage" and "Feature overlap" in step["evidence"] for step in trace)
+    assert any(step["module"] == "privacy_risk" and "confidence gap" in step["evidence"] for step in trace)
+    assert "fresh holdout" in combined
+    assert "Calibrate probability" in combined

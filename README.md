@@ -2,6 +2,28 @@
 
 **A trust and security assessment framework for encrypted traffic classification models that verifies model integrity, evaluates classifier performance, scans security risks, tracks trust drift, and generates deployment-readiness reports.**
 
+## Current Implemented Workflow
+
+Credora now runs a security-first model trust workflow:
+
+- Phase 1 hardens uploads, API access, signed package trust, raw pickle/joblib handling, trusted hashes, and model loading preflight checks.
+- Phase 2 adds deeper truthfulness checks: SHAP fallback explainability, train/test leakage detection, train/test F1 comparison, and privacy/memorization confidence-gap analysis.
+- Phase 3 provides release workflow polish: signed `.credora` package release gates, CI validation, dashboard evidence, and one-command local verification.
+
+For the repeatable Phase 3 command set, see `docs/PHASE3_RUNBOOK.md`.
+
+## Multi-User Access and Data Isolation
+
+Credora now supports username/password login for the dashboard and bearer-token authentication for the API. Each user owns their uploaded files, model registry entries, scan history, reports, drift windows, runtime integrity records, and alerts. Uploaders only see their own data; reviewers and admins can enable all-user visibility for review workflows.
+
+Local bootstrap credentials are created only when the registry has no users: `admin` / `credora-admin`. For real use, set `CREDORA_BOOTSTRAP_ADMIN`, `CREDORA_BOOTSTRAP_EMAIL`, `CREDORA_BOOTSTRAP_PASSWORD`, and `CREDORA_JWT_SECRET` in a local `.env` file or shell environment, then run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\migrate_add_users.py --show-users
+```
+
+The auth scheme assumes TLS when deployed beyond localhost. A JWT bearer token over plain HTTP should be treated as exposed.
+
 ---
 
 ## 1. Vision
@@ -413,6 +435,14 @@ Use these commands from the real project folder:
 cd "C:\Users\glady\Mini project"
 ```
 
+### Run the full local verification suite
+
+```powershell
+& ".venv\Scripts\python.exe" scripts\verify_project.py
+```
+
+Add `--with-api --with-dashboard` to include local server smoke checks.
+
 ### Start the dashboard
 
 ```powershell
@@ -433,23 +463,37 @@ In the sidebar, open **Upload & Analyze Model**, choose **Demo model**, then cli
 & ".venv\Scripts\python.exe" scripts\run_phase1_scan.py
 ```
 
-This runs the complete Phase 1-3 assessment: model verification, dependency scanning, classifier evaluation, robustness, data drift, explainability, behavior analysis, model risk, adversarial validation, runtime integrity, the production deployment gate, trust drift, scoring, and report generation.
+This runs the complete assessment: model verification, dependency scanning, classifier evaluation, robustness, data drift, explainability, leakage/holdout checks, privacy risk, behavior analysis, model risk, adversarial validation, runtime integrity, the production deployment gate, trust drift, scoring, and report generation.
 
-### Run Phase 3 automated tests
+### Run automated tests
 
 ```powershell
 & ".venv\Scripts\python.exe" -m pytest tests -q
 ```
 
-The 13-test suite verifies adversarial scenarios, a deliberately evasive traffic holdout, production gate decisions, signed package trust, Zeek/CICFlowMeter conversion, rolling drift persistence, runtime history, and tamper alerts.
+The test suite verifies Phase 1 security controls, Phase 2 truthfulness checks, adversarial scenarios, production gate decisions, signed package trust, flow conversion, rolling drift persistence, runtime history, and tamper alerts.
 
-### Run the Phase 3 release gate
+### Run the signed Phase 3 release gate
 
 ```powershell
-& ".venv\Scripts\python.exe" scripts\phase3_release_gate.py --minimum-score 85
+& ".venv\Scripts\python.exe" scripts\package_model.py keygen `
+  --private-key data\signing_keys\release-private.pem `
+  --public-key data\signing_keys\release-public.pem
+
+& ".venv\Scripts\python.exe" scripts\package_model.py create `
+  --model data\sample_models\traffic_rf_v1.joblib `
+  --metadata data\metadata\traffic_rf_v1_metadata.json `
+  --requirements data\sample_requirements\requirements_demo.txt `
+  --private-key data\signing_keys\release-private.pem `
+  --output data\packages\traffic_rf_v1.credora
+
+& ".venv\Scripts\python.exe" scripts\phase3_release_gate.py `
+  --package data\packages\traffic_rf_v1.credora `
+  --trust-key data\signing_keys\release-public.pem `
+  --minimum-score 85
 ```
 
-The command exits with code `0` only when the trust threshold and deployment decision pass. Add `--require-approved` when conditional releases must also fail CI.
+Raw `.joblib` release-gate runs are allowed for diagnostics but are capped at `70/100`; signed `.credora` packages are the release path. The command exits with code `0` only when the trust threshold and deployment decision pass. Add `--require-approved` when conditional releases must also fail CI.
 
 ### Monitor runtime model integrity
 
@@ -621,7 +665,7 @@ Corrective actions are generated from the current report evidence, not selected 
 
 Phase 3 is complete for the project scope. The scanner now covers pre-deployment assessment and post-deployment operational monitoring.
 
-The latest local release gate for the normal classifier scores `97.74/100`. Every mandatory score and integrity check passes, but a raw `.joblib` artifact remains **conditional** because pickle-family files must never be loaded from an untrusted source. The signed `.credora` packaging workflow supplies the hardened, externally trusted path for release automation.
+Raw `.joblib` and `.pkl` assessments are intentionally capped at `70/100` until a signed package is verified. The signed `.credora` packaging workflow is the production-style path used by CI and release automation; it verifies an external Ed25519 signature, checks artifact hashes, and then runs the release gate with the trusted package evidence.
 
 The real-model evasive validation profile scores `62.03/100` and is **blocked**. It produces `0.0` recall for `Suspicious`, confuses all 75 suspicious flows as `VPN`, detects high drift across all eight model features, and fails five production gate checks. This proves the scanner produces materially different evidence and fixes when model behavior becomes unsafe.
 
@@ -635,7 +679,7 @@ Completed Phase 3 operational milestones:
 - containerized API/dashboard deployment;
 - CI execution of all tests, the real model release gate, and the container build.
 
-Phase 4 remains responsible for signing and independently verifying final trust reports and for stronger deployment identity/key-management policy.
+Phase 4 is now implemented for signed final trust reports and trusted report-signer verification. Credora can generate Ed25519 report-signing keys, attach a `report_signature` block to the final JSON trust report, verify that report independently from CMD, and show whether the report matches an active trusted signer in the dashboard. See `docs/PHASE4_RUNBOOK.md` for the exact commands.
 
 ---
 
@@ -657,3 +701,7 @@ flow_bytes_per_second
 ```
 
 Those feature rows can then be passed into the trained classifier for live predictions.
+
+
+
+

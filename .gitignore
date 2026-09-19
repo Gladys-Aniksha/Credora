@@ -12,3 +12,8 @@ data/signing_keys/
 *.pem
 
 outputs/
+
+.pytest_tmp/
+data/packages/
+.env
+

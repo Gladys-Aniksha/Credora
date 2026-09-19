@@ -37,3 +37,7 @@ reportlab
 # Testing
 pytest
 python-docx
+passlib[bcrypt]
+python-jose[cryptography]
+slowapi
+

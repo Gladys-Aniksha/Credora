@@ -16,18 +16,7 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
-      - name: Run automated tests
-        run: python -m pytest -q
-      - name: Create signed sample package
-        run: |
-          python scripts/package_model.py keygen --private-key .credora-ci-private.pem --public-key .credora-ci-public.pem
-          python scripts/package_model.py create \
-            --model data/sample_models/traffic_rf_v1.joblib \
-            --metadata data/metadata/traffic_rf_v1_metadata.json \
-            --requirements data/sample_requirements/requirements_demo.txt \
-            --private-key .credora-ci-private.pem \
-            --output traffic_rf_v1.credora
-      - name: Run Phase 3 model release gate
-        run: python scripts/phase3_release_gate.py --package traffic_rf_v1.credora --trust-key .credora-ci-public.pem --minimum-score 85
+      - name: Run Credora verification suite
+        run: python scripts/verify_project.py --skip-scan
       - name: Build production container
         run: docker build --tag credora:${{ github.sha }} .

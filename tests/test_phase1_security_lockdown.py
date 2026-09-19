@@ -65,3 +65,36 @@ def test_api_mutating_routes_require_key() -> None:
 
 def test_api_accepts_configured_key() -> None:
     assert require_api_key("dev-credora-key") is None
+
+
+def test_load_checked_model_runs_isolated_preflight(monkeypatch, tmp_path) -> None:
+    from core import model_loading
+
+    model_file = tmp_path / "model.joblib"
+    model_file.write_bytes(b"\x80\x04.")
+    calls = []
+
+    monkeypatch.setattr(model_loading, "assert_pickle_is_safe", lambda path: None)
+    monkeypatch.setattr(model_loading, "_run_deserialization_preflight", lambda path: calls.append(path))
+    monkeypatch.setattr(model_loading.joblib, "load", lambda path: {"loaded": str(path)})
+
+    loaded = model_loading.load_checked_model(model_file)
+
+    assert loaded["loaded"] == str(model_file)
+    assert calls == [model_file]
+
+
+def test_deserialization_preflight_reports_child_failure(monkeypatch, tmp_path) -> None:
+    import subprocess
+    from core.model_loading import UnsafeModelError, _run_deserialization_preflight
+
+    model_file = tmp_path / "model.joblib"
+    model_file.write_bytes(b"\x80\x04.")
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 1, stdout="", stderr="boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(UnsafeModelError, match="isolated preflight"):
+        _run_deserialization_preflight(model_file)
