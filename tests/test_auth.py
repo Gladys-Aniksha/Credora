@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import json
+import secrets
+
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
+import core.auth as auth
 import core.db as db
+from api.main import login_rate_limit
 from core.auth import create_access_token, get_current_user, require_role, token_user
+from core.config import API_KEY, _required_environment_variable
 
 
 def _minimal_report(model_name: str, score: float) -> dict:
@@ -18,6 +25,24 @@ def _minimal_report(model_name: str, score: float) -> dict:
             {"module": "model_verification", "status": "pass", "score": 100, "summary": "ok", "findings": [], "details": {"version": "1.0"}},
         ],
     }
+
+
+def _request(client_host: str = "127.0.0.1", path: str = "/models") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": [],
+            "client": (client_host, 50000),
+            "server": ("testserver", 80),
+        }
+    )
 
 
 @pytest.fixture()
@@ -36,6 +61,19 @@ def test_register_login_and_wrong_password_fails(isolated_registry) -> None:
 
     with pytest.raises(ValueError):
         db.create_user("alice", "another-password")
+
+
+def test_unknown_username_still_verifies_dummy_password_hash(isolated_registry, monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def record_verification(password: str, password_hash: str) -> bool:
+        calls.append((password, password_hash))
+        return False
+
+    monkeypatch.setattr(auth, "verify_password", record_verification)
+
+    assert db.authenticate_user("missing-user", "submitted-password") is None
+    assert calls == [("submitted-password", auth.DUMMY_PASSWORD_HASH)]
 
 
 def test_owner_scoped_scan_history_allows_same_model_name(isolated_registry, tmp_path) -> None:
@@ -59,13 +97,54 @@ def test_auth_token_and_role_enforcement(isolated_registry) -> None:
 
     assert token_user(token)["username"] == "alice"
     with pytest.raises(HTTPException) as missing:
-        get_current_user(token=None, x_credora_api_key=None)
+        get_current_user(request=_request(), token=None, x_credora_api_key=None)
     assert missing.value.status_code == 401
 
     admin_only = require_role("admin")
     with pytest.raises(HTTPException) as denied:
         admin_only(user=alice)
     assert denied.value.status_code == 403
+
+
+def test_service_api_key_is_required(monkeypatch) -> None:
+    monkeypatch.delenv("CREDORA_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="CREDORA_API_KEY must be set"):
+        _required_environment_variable("CREDORA_API_KEY")
+
+
+def test_service_api_key_is_audited_and_shares_login_rate_limit(isolated_registry) -> None:
+    auth._auth_rate_limit_buckets.clear()
+    request = _request(client_host="192.0.2.10", path="/models")
+
+    for _ in range(auth.AUTH_RATE_LIMIT_MAX_REQUESTS - 1):
+        login_rate_limit(request)
+
+    service_user = get_current_user(request=request, token=None, x_credora_api_key=API_KEY)
+    assert service_user["username"] == "service-admin"
+
+    logs = db.list_audit_logs(event_type="auth.service_key_used")
+    assert len(logs) == 1
+    assert logs[0]["details"] == {"client": "192.0.2.10", "path": "/models"}
+    assert API_KEY not in json.dumps(logs)
+
+    with pytest.raises(HTTPException) as limited:
+        get_current_user(request=request, token=None, x_credora_api_key=API_KEY)
+    assert limited.value.status_code == 429
+
+
+def test_invalid_service_key_is_rejected_and_audited(isolated_registry) -> None:
+    auth._auth_rate_limit_buckets.clear()
+    request = _request(client_host="192.0.2.11", path="/scans")
+    invalid_key = secrets.token_urlsafe(32)
+
+    with pytest.raises(HTTPException) as rejected:
+        get_current_user(request=request, token=None, x_credora_api_key=invalid_key)
+    assert rejected.value.status_code == 401
+
+    logs = db.list_audit_logs(event_type="auth.service_key_rejected")
+    assert len(logs) == 1
+    assert invalid_key not in json.dumps(logs)
 
 
 def test_token_scoped_scan_listing_is_isolated(isolated_registry, tmp_path) -> None:

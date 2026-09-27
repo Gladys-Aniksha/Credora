@@ -277,13 +277,15 @@ def list_users() -> list[dict[str, Any]]:
 
 
 def authenticate_user(username: str, password: str) -> dict[str, Any] | None:
-    from core.auth import verify_password
+    from core.auth import DUMMY_PASSWORD_HASH, verify_password
 
     init_db()
     username_key = (username or "").strip().lower()
     with connect() as conn:
         row = conn.execute("SELECT * FROM users WHERE username = ?", (username_key,)).fetchone()
-        if not row or int(row["disabled"] or 0) or not verify_password(password, row["password_hash"]):
+        password_hash = row["password_hash"] if row else DUMMY_PASSWORD_HASH
+        password_matches = verify_password(password, password_hash)
+        if not row or int(row["disabled"] or 0) or not password_matches:
             row = None
         else:
             conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (utc_now(), row["id"]))

@@ -6,7 +6,9 @@ import pickle
 import pytest
 from fastapi import HTTPException
 
+import core.config as config
 from api.main import require_api_key
+from core.config import API_KEY
 from core.hashing import sha256_file
 from core.model_loading import UnsafeModelError, assert_pickle_is_safe
 from modules.phase1_foundation.m1_model_verification.verifier import verify_model
@@ -64,7 +66,29 @@ def test_api_mutating_routes_require_key() -> None:
 
 
 def test_api_accepts_configured_key() -> None:
-    assert require_api_key("dev-credora-key") is None
+    assert require_api_key(API_KEY) is None
+
+
+def test_model_file_type_reads_only_magic_bytes(monkeypatch, tmp_path) -> None:
+    class HeaderStream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self, size: int = -1) -> bytes:
+            assert size == 4
+            return b"\x80\x04.\x00"
+
+    def open_header_only(path, mode="r", *args, **kwargs):
+        assert mode == "rb"
+        return HeaderStream()
+
+    monkeypatch.setattr(config.Path, "open", open_header_only)
+    monkeypatch.setattr(config, "filetype", None)
+
+    assert config.verify_model_file_type(tmp_path / "model.joblib")
 
 
 def test_load_checked_model_runs_isolated_preflight(monkeypatch, tmp_path) -> None:

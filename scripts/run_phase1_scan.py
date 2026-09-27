@@ -20,7 +20,11 @@ from core.storage import save_json
 from modules.phase1_foundation.m1_model_verification.verifier import verify_model
 from modules.phase1_foundation.m2_dependency_scanner.scanner import scan_dependencies
 from modules.phase1_foundation.m8_etc_classifier.evaluate import evaluate_classifier
-from modules.phase1_foundation.m11_trust_score.aggregator import calculate_trust_score
+from modules.phase1_foundation.m11_trust_score.aggregator import (
+    FINAL_EXPECTED_MODULES,
+    PRE_DEPLOYMENT_EXPECTED_MODULES,
+    calculate_trust_score,
+)
 from modules.phase2_deep_trust.m3_robustness_testing.robustness import test_robustness
 from modules.phase2_deep_trust.m4_data_drift.drift import detect_data_drift
 from modules.phase2_deep_trust.m5_explainability.explain import explain_model
@@ -49,12 +53,12 @@ def _apply_raw_model_cap(result: ModuleResult, metadata: dict[str, Any]) -> Modu
         return result
     result.score = RAW_MODEL_TRUST_CAP
     result.status = "warning"
-    result.summary = "Raw pickle/joblib provenance caps the maximum trust score until a signed package is verified."
+    result.summary = "Unsigned model provenance caps the maximum trust score until a signed package is verified."
     result.findings.append(Finding(
         "trust_score",
         "Raw model provenance cap applied",
         "medium",
-        f"Unsigned raw model uploads cannot score above {RAW_MODEL_TRUST_CAP:.0f}/100.",
+        f"Unsigned .joblib, .pkl, and .onnx uploads cannot score above {RAW_MODEL_TRUST_CAP:.0f}/100.",
         "Package and sign the model with Credora before requesting deployment approval.",
     ))
     result.details["raw_model_trust_cap"] = RAW_MODEL_TRUST_CAP
@@ -155,14 +159,14 @@ def run_phase1_scan(
     results.append(run_step("Level 12 - Runtime Integrity", "comparing the active artifact with its approved hash and signature baseline.", lambda: check_runtime_integrity(model_path, metadata)))
 
     progress("Level 13 - Trust Scoring", "Starting: combining module evidence using the published weighting policy.")
-    preliminary_trust = calculate_trust_score(results)
+    preliminary_trust = calculate_trust_score(results, PRE_DEPLOYMENT_EXPECTED_MODULES)
     preliminary_trust = _apply_raw_model_cap(preliminary_trust, metadata)
     progress("Level 13 - Trust Scoring", f"Completed: preliminary trust score is {preliminary_trust.score:.1f}/100.")
-    results.append(run_step("Level 14 - Deployment Gate", "applying mandatory score, integrity, adversarial, and security-sensitive recall controls.", lambda: evaluate_deployment_gate(results, preliminary_trust.score, metadata)))
+    results.append(run_step("Level 14 - Deployment Gate", "applying mandatory score, integrity, adversarial, and security-sensitive recall controls.", lambda: evaluate_deployment_gate(results, preliminary_trust.score, metadata, preliminary_trust)))
     model_name = metadata.get("model_name") or Path(model_path).stem
     results.append(run_step("Level 15 - Trust Drift", "comparing this score with prior assessments of the same model identity.", lambda: analyze_trust_drift(preliminary_trust.score, model_name, owner_id=owner_id)))
     progress("Level 16 - Final Report", "Starting: interpreting evidence and generating model-specific corrective actions and retest conditions.")
-    trust_result = calculate_trust_score(results)
+    trust_result = calculate_trust_score(results, FINAL_EXPECTED_MODULES)
     trust_result = _apply_raw_model_cap(trust_result, metadata)
     results.append(trust_result)
 
@@ -194,7 +198,10 @@ def run_phase1_scan(
                 findings=[],
                 details={"error": str(exc)},
             ))
-            trust_result = calculate_trust_score([result for result in results if result.module != "trust_score"])
+            trust_result = calculate_trust_score(
+                [result for result in results if result.module != "trust_score"],
+                FINAL_EXPECTED_MODULES,
+            )
             trust_result = _apply_raw_model_cap(trust_result, metadata)
             results = [result for result in results if result.module != "trust_score"] + [trust_result]
             analysis_trace = build_analysis_trace(results)

@@ -4,16 +4,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score, recall_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score
 
 from core.db import get_sensitive_label_taxonomy
-from core.model_loading import load_checked_model
+from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
 
 
-SENSITIVE_LABEL_HINTS = ("malicious", "attack", "suspicious", "botnet", "scan", "dos", "ddos", "intrusion")
 TIMING_HINTS = ("duration", "iat", "inter_arrival", "latency", "time")
 VOLUME_HINTS = ("byte", "packet", "size", "count", "rate", "per_second")
+TRIAL_SEEDS = tuple(range(25))
 
 
 def _numeric_columns(frame: pd.DataFrame) -> list[str]:
@@ -22,6 +22,11 @@ def _numeric_columns(frame: pd.DataFrame) -> list[str]:
 
 def _matching_columns(columns: list[str], hints: tuple[str, ...]) -> list[str]:
     return [column for column in columns if any(hint in column.lower() for hint in hints)]
+
+
+def _sensitive_labels(labels: list[str]) -> list[str]:
+    sensitive_hints = get_sensitive_label_taxonomy()
+    return [label for label in labels if any(hint in label.lower() for hint in sensitive_hints)]
 
 
 def _sensitive_recall(y_true: pd.Series, y_pred: pd.Series, sensitive_labels: list[str]) -> float | None:
@@ -33,12 +38,11 @@ def _sensitive_recall(y_true: pd.Series, y_pred: pd.Series, sensitive_labels: li
     return float(np.min(recalls)) if len(recalls) else None
 
 
-def _feature_importance_order(model, feature_columns: list[str]) -> list[str]:
-    estimator = list(model.named_steps.values())[-1] if hasattr(model, "named_steps") else model
-    values = getattr(estimator, "feature_importances_", None)
-    if values is None or len(values) != len(feature_columns):
+def _feature_importance_order(model: ModelBackend, feature_columns: list[str]) -> list[str]:
+    values = model.feature_importance(feature_columns)
+    if not values:
         return feature_columns
-    return [feature for feature, _ in sorted(zip(feature_columns, values), key=lambda item: item[1], reverse=True)]
+    return [str(item["feature"]) for item in values]
 
 
 def _build_scenarios(
@@ -47,13 +51,14 @@ def _build_scenarios(
     labels: pd.Series,
     feature_columns: list[str],
     sensitive_labels: list[str],
+    seed: int,
 ) -> list[tuple[str, str, pd.DataFrame, list[str]]]:
     numeric = _numeric_columns(features)
     timing = _matching_columns(numeric, TIMING_HINTS) or numeric[: max(1, len(numeric) // 3)]
     volume = _matching_columns(numeric, VOLUME_HINTS) or numeric
     ranked = _feature_importance_order(model, feature_columns)
     top_features = [feature for feature in ranked if feature in numeric][:2]
-    rng = np.random.default_rng(2026)
+    rng = np.random.default_rng(seed)
 
     timing_frame = features.copy()
     for column in timing:
@@ -83,12 +88,16 @@ def _build_scenarios(
     ]
 
 
+def _percentile(values: list[float], percentile: float = 10) -> float:
+    return float(np.percentile(values, percentile))
+
+
 def run_adversarial_validation(
     model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None
 ) -> ModuleResult:
     metadata = metadata or {}
     try:
-        model = load_checked_model(model_path)
+        model = load_model_backend(model_path)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(
@@ -108,26 +117,66 @@ def run_adversarial_validation(
     x_test = data[feature_columns].copy()
     y_true = data[target_column].astype(str)
     baseline_pred = pd.Series(model.predict(x_test)).astype(str)
+    baseline_accuracy = float(accuracy_score(y_true, baseline_pred))
     baseline_f1 = float(f1_score(y_true, baseline_pred, average="weighted", zero_division=0))
     labels = [str(label) for label in (metadata.get("class_labels") or sorted(y_true.unique().tolist()))]
-    sensitive_hints = get_sensitive_label_taxonomy() or SENSITIVE_LABEL_HINTS
-    sensitive_labels = [label for label in labels if any(hint in label.lower() for hint in sensitive_hints)]
+    sensitive_labels = _sensitive_labels(labels)
     baseline_sensitive_recall = _sensitive_recall(y_true, baseline_pred, sensitive_labels)
 
+    scenario_trials: dict[str, dict] = {}
+    for seed in TRIAL_SEEDS:
+        for name, description, attacked, changed_features in _build_scenarios(
+            model, x_test, y_true, feature_columns, sensitive_labels, seed
+        ):
+            attacked_pred = pd.Series(model.predict(attacked)).astype(str)
+            sensitive_recall = _sensitive_recall(y_true, attacked_pred, sensitive_labels)
+            scenario = scenario_trials.setdefault(name, {
+                "description": description,
+                "features_changed": changed_features,
+                "trials": [],
+            })
+            scenario["trials"].append({
+                "seed": seed,
+                "accuracy": float(accuracy_score(y_true, attacked_pred)),
+                "f1": float(f1_score(y_true, attacked_pred, average="weighted", zero_division=0)),
+                "prediction_stability": float(np.mean(attacked_pred.values == baseline_pred.values)),
+                "sensitive_recall": sensitive_recall,
+            })
+
     scenarios = []
-    for name, description, attacked, changed_features in _build_scenarios(model, x_test, y_true, feature_columns, sensitive_labels):
-        attacked_pred = pd.Series(model.predict(attacked)).astype(str)
-        attacked_f1 = float(f1_score(y_true, attacked_pred, average="weighted", zero_division=0))
-        stability = float(np.mean(attacked_pred.values == baseline_pred.values))
-        sensitive_recall = _sensitive_recall(y_true, attacked_pred, sensitive_labels)
+    for name, scenario in scenario_trials.items():
+        trials = scenario["trials"]
+        accuracy_values = [trial["accuracy"] for trial in trials]
+        f1_values = [trial["f1"] for trial in trials]
+        stability_values = [trial["prediction_stability"] for trial in trials]
+        sensitive_values = [trial["sensitive_recall"] for trial in trials if trial["sensitive_recall"] is not None]
+        worst_f1 = _percentile(f1_values)
         scenarios.append({
             "scenario": name,
-            "description": description,
-            "features_changed": changed_features,
-            "f1": round(attacked_f1, 4),
-            "f1_drop": round(max(0.0, baseline_f1 - attacked_f1), 4),
-            "prediction_stability": round(stability, 4),
-            "sensitive_recall": round(sensitive_recall, 4) if sensitive_recall is not None else None,
+            "description": scenario["description"],
+            "features_changed": scenario["features_changed"],
+            "trial_count": len(trials),
+            "lower_percentile": 10,
+            "mean_accuracy": round(float(np.mean(accuracy_values)), 4),
+            "accuracy": round(_percentile(accuracy_values), 4),
+            "mean_f1": round(float(np.mean(f1_values)), 4),
+            "f1": round(worst_f1, 4),
+            "f1_drop": round(max(0.0, baseline_f1 - worst_f1), 4),
+            "mean_prediction_stability": round(float(np.mean(stability_values)), 4),
+            "prediction_stability": round(_percentile(stability_values), 4),
+            "mean_sensitive_recall": round(float(np.mean(sensitive_values)), 4) if sensitive_values else None,
+            "sensitive_recall": round(_percentile(sensitive_values), 4) if sensitive_values else None,
+            "trials": [
+                {
+                    "seed": trial["seed"],
+                    "accuracy": round(trial["accuracy"], 4),
+                    "f1": round(trial["f1"], 4),
+                    "prediction_stability": round(trial["prediction_stability"], 4),
+                    "sensitive_recall": round(trial["sensitive_recall"], 4)
+                    if trial["sensitive_recall"] is not None else None,
+                }
+                for trial in trials
+            ],
         })
 
     worst = min(scenarios, key=lambda item: (item["f1"], item["prediction_stability"]))
@@ -173,9 +222,12 @@ def run_adversarial_validation(
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
     return ModuleResult(
         module="adversarial_validation", status=status, score=score,
-        summary=f"Ran {len(scenarios)} adversarial encrypted-flow scenario(s); worst-case F1 was {worst['f1']:.3f}.",
+        summary=f"Ran {len(scenarios)} adversarial encrypted-flow scenarios across {len(TRIAL_SEEDS)} trials; worst-case F1 was {worst['f1']:.3f}.",
         findings=findings,
         details={
+            "trial_count": len(TRIAL_SEEDS),
+            "lower_percentile": 10,
+            "baseline_accuracy": round(baseline_accuracy, 4),
             "baseline_f1": round(baseline_f1, 4),
             "baseline_sensitive_recall": round(baseline_sensitive_recall, 4) if baseline_sensitive_recall is not None else None,
             "worst_case_f1": worst["f1"],

@@ -3,7 +3,6 @@ fastapi
 uvicorn[standard]
 python-multipart
 pydantic
-sqlalchemy
 python-dotenv
 
 # Dashboard
@@ -17,6 +16,8 @@ scikit-learn
 joblib
 xgboost
 shap
+onnx
+onnxruntime
 
 # Metrics and visualization
 matplotlib

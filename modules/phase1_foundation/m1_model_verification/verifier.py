@@ -32,7 +32,7 @@ def verify_model(model_path: str | Path, metadata: dict | None = None) -> Module
             "Unsupported model format",
             "high",
             f"The file extension {extension} is not supported in Phase 1.",
-            "Use a scikit-learn model saved as .joblib or .pkl.",
+            "Use a supported tabular classifier saved as .joblib, .pkl, or .onnx.",
         ))
     elif not verify_model_file_type(path):
         score -= 40
@@ -40,7 +40,7 @@ def verify_model(model_path: str | Path, metadata: dict | None = None) -> Module
             "model_verification",
             "Model file signature mismatch",
             "critical",
-            "The artifact extension is supported, but its file header does not look like a pickle/joblib stream.",
+            "The artifact extension is supported, but its serialized structure is invalid for that model format.",
             "Reject renamed or malformed model uploads before any automatic loading.",
         ))
 

@@ -335,7 +335,7 @@ def build_remediation_plan(results: list[ModuleResult], model_name: str, metadat
             _module_evidence(gate),
             f"The release fails mandatory controls: {', '.join(failed) or 'see gate evidence'}.",
             "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
-            f"Every mandatory check must report passed, with no high/critical finding and a final decision of approved or explicitly reviewed conditional according to policy.",
+            "Every mandatory check must report passed, with no high/critical finding and a final decision of approved or explicitly reviewed conditional according to policy.",
             [finding.title for finding in gate.findings if finding.severity != "info"],
         ))
 

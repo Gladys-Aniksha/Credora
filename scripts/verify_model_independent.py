@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, precision_score, recall_score
 
-from core.model_loading import load_checked_model
+from core.model_backend import load_model_backend
 
 
 def load_metadata(metadata_path: Path | None) -> dict:
@@ -23,7 +23,7 @@ def load_metadata(metadata_path: Path | None) -> dict:
 
 def verify_model(model_path: Path, dataset_path: Path, metadata_path: Path | None) -> dict:
     metadata = load_metadata(metadata_path)
-    model = load_checked_model(model_path)
+    model = load_model_backend(model_path)
     dataset = pd.read_csv(dataset_path)
 
     target_column = metadata.get("target_column", "label")

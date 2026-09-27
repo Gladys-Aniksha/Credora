@@ -14,16 +14,18 @@ class UnsafeModelError(ValueError):
     """Raised when a serialized model contains unsafe pickle references."""
 
 
-ALLOWED_GLOBAL_PREFIXES = (
-    "builtins",
-    "collections",
-    "copyreg",
-    "joblib.",
-    "numpy",
-    "dtype",
-    "pandas.",
-    "scipy.",
-    "sklearn.",
+ALLOWED_GLOBAL_TOP_LEVEL_MODULES = frozenset(
+    {
+        "builtins",
+        "collections",
+        "copyreg",
+        "joblib",
+        "numpy",
+        "dtype",
+        "pandas",
+        "scipy",
+        "sklearn",
+    }
 )
 
 MODEL_LOAD_TIMEOUT_SECONDS = 15
@@ -31,7 +33,8 @@ _CHILD_LOAD_ENV = "CREDORA_MODEL_LOAD_CHILD"
 
 
 def _is_allowed_global(module: str) -> bool:
-    return module == "numpy" or any(module == prefix.rstrip(".") or module.startswith(prefix) for prefix in ALLOWED_GLOBAL_PREFIXES)
+    top_level_module = module.split(".", 1)[0]
+    return top_level_module in ALLOWED_GLOBAL_TOP_LEVEL_MODULES
 
 
 def scan_pickle_globals(path: str | Path) -> list[str]:

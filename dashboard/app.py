@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-from html import escape
 import json
 from pathlib import Path
 import sys
@@ -15,45 +13,24 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.auth import can_view_all, create_access_token, create_refresh_token
-from core.config import DATA_DIR, METADATA_DIR, PROCESSED_DATA_DIR, REPORT_DIR, SAMPLE_MODEL_DIR, SAMPLE_REQUIREMENTS_DIR
+from core.auth import can_view_all
 from core.db import (
     acknowledge_runtime_alert,
-    add_trusted_signer,
-    admin_set_password,
-    authenticate_user,
     change_user_password,
-    create_deployment_override,
-    create_user,
     delete_model_records,
     delete_scan,
-    get_deployment_policy,
-    get_sensitive_label_taxonomy,
-    get_trust_weights,
-    init_db,
     latest_scan,
-    list_drift_windows,
     list_integrity_checks,
     list_models,
     list_runtime_alerts,
-    list_audit_logs,
     list_scans,
-    list_trusted_signers,
-    list_users,
-    platform_analytics,
-    revoke_user_sessions,
-    set_deployment_policy,
-    set_sensitive_label_taxonomy,
-    set_trust_weights,
-    set_trusted_signer_status,
-    set_user_disabled,
-    update_user_role,
 )
-from core.report_signing import verify_report_against_trusted_signers
-from core.security import ensure_within_directory, slugify_filename
-from modules.phase3_operations.m7_flow_ingestion.collector import ingest_flow_file
-from modules.phase3_operations.m8_production_monitoring.monitor import monitor_rolling_windows
-from scripts.run_phase1_scan import run_phase1_scan
+from dashboard.components.common import format_time, h, module_label, render_page_head
+from dashboard.components.scan_submission import execute_scan_submission, render_scan_submission
+from dashboard.pages.admin import render_admin_page
+from dashboard.pages.auth import require_dashboard_auth
+from dashboard.pages.production_monitoring import render_flow_ingestion, render_production_drift_windows
+from dashboard.pages.reports import render_reports_page
 
 
 st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="expanded")
@@ -437,41 +414,6 @@ def safe_score(value: object, default: float = 0.0) -> float:
         return default
 
 
-def h(value: object) -> str:
-    return escape(str(value))
-
-
-def module_label(module: str) -> str:
-    labels = {
-        "model_verification": "Model Integrity",
-        "dependency_scanner": "Dependency Risk",
-        "classifier_evaluation": "Traffic Classifier",
-        "robustness_testing": "Robustness",
-        "data_drift_detection": "Data Drift",
-        "explainability": "Explainability",
-        "dataset_leakage": "Leakage and Holdout Check",
-        "privacy_risk": "Privacy and Memorization Risk",
-        "behavior_analysis": "Behavior Analysis",
-        "model_risk_analyzer": "Model Risk",
-        "adversarial_validation": "Adversarial Validation",
-        "runtime_integrity": "Runtime Integrity",
-        "deployment_gate": "Production Deployment Gate",
-        "trust_drift_timeline": "Trust Drift",
-        "trust_score": "Trust Score Engine",
-    }
-    return labels.get(module, module.replace("_", " ").title())
-
-
-def format_time(value: str) -> str:
-    if not value or value == "not generated":
-        return "Not evaluated"
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return parsed.strftime("%d %b %Y, %I:%M %p")
-    except ValueError:
-        return value
-
-
 def all_findings(report: dict) -> list[dict]:
     rows: list[dict] = []
     for result in report.get("module_results", []):
@@ -595,13 +537,6 @@ def overview_telemetry_frame(classifier_details: dict, adversarial_details: dict
         rows.append({"Time": point, "Flow class": "Masked / VPN", "Relative volume": round(vpn_base * vpn, 2)})
     return pd.DataFrame(rows)
 
-def render_page_head(title: str, subtitle: str) -> None:
-    st.markdown(
-        f"<div class='page-head'><h1>{h(title)}</h1><p>{h(subtitle)}</p></div>",
-        unsafe_allow_html=True,
-    )
-
-
 def remediation_for_finding(finding: dict, remediation_plan: list[dict] | None = None) -> dict | None:
     for item in remediation_plan or []:
         if finding.get("title") in item.get("finding_titles", []):
@@ -659,104 +594,8 @@ def resolve_report(selected_model: str | None) -> dict | None:
     return latest_scan(owner_id=owner_id, include_all=include_all)
 
 
-def persist_upload(uploaded: object, subdir: str) -> Path | None:
-    if uploaded is None:
-        return None
-    user = st.session_state.get("auth_user") or {"id": "shared"}
-    folder = PROJECT_ROOT / "data" / "uploads" / str(user["id"]) / subdir
-    safe_name = Path(uploaded.name).name
-    path = ensure_within_directory(folder / safe_name, folder)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(uploaded.getbuffer())
-    return path
-
-
 def update_setting(setting_key: str, control_key: str) -> None:
     st.session_state[setting_key] = bool(st.session_state.get(control_key, False))
-
-
-def require_dashboard_auth() -> dict:
-    init_db()
-    if st.session_state.get("auth_user"):
-        return st.session_state["auth_user"]
-
-    st.markdown(
-        """
-        <div class="login-topbar">
-          <div><strong>Credora</strong><span class="login-badge">Open Source</span><div>ML Classifier Trust & Security Scanner</div></div>
-          <div class="login-links"><span>Research & Evaluation Platform</span><span>Documentation</span><span>GitHub Repo</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    left, right = st.columns([0.9, 1.35], gap="large", vertical_alignment="center")
-    with left:
-        st.markdown(
-            """
-            <div class="login-panel">
-              <div>
-                <div class="kicker">Encrypted-Traffic ML Assurance</div>
-                <h1>Trust Verification for Encrypted-Traffic ML Classifiers</h1>
-                <p>Evaluate robustness, monitor drift, test feature-space evasion resilience, and generate cryptographically signed inspection manifests.</p>
-                <div class="login-modules">
-                  <h3>Credora Core Scan Modules</h3>
-                  <div class="login-module-grid">
-                    <div>Robustness Testing<br><span>Empirical stress evaluation</span></div>
-                    <div>Dataset Drift<br><span>PSI drift monitoring</span></div>
-                    <div>Feature Evasion<br><span>Tabular scenario testing</span></div>
-                    <div>Ed25519 Signatures<br><span>Audit manifests</span></div>
-                  </div>
-                </div>
-                <div class="login-checks">
-                  <div class="login-check"><b>✓</b><div>PSI-based drift detection between training and evaluation datasets.</div></div>
-                  <div class="login-check"><b>✓</b><div>Feature-space evasion scenario testing for encrypted traffic classifiers.</div></div>
-                  <div class="login-check"><b>✓</b><div>Model packaging and verification step with tamper-evident audit manifests.</div></div>
-                </div>
-              </div>
-              <div class="login-foot"><div><strong>Credora Research Toolkit</strong>Transparent & reproducible ML evaluation</div><div class="login-version">v2.1 local</div></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with right:
-        with st.container(border=True):
-            login_tab, register_tab = st.tabs(["Sign In", "Register Account"])
-            with login_tab:
-                st.markdown("<h2>Sign in to Credora</h2><p>Enter your credentials to access classifier audit runs and benchmark manifests.</p>", unsafe_allow_html=True)
-                with st.form("credora-login"):
-                    username = st.text_input("Email Address or Username", value="admin")
-                    password = st.text_input("Password", type="password")
-                    remember = st.checkbox("Remember me on this device", value=True)
-                    submitted = st.form_submit_button("Sign in to Credora  ->", type="primary", width="stretch")
-                if submitted:
-                    user = authenticate_user(username, password)
-                    if user:
-                        st.session_state["auth_user"] = user
-                        st.session_state["access_token"] = create_access_token(user)
-                        st.session_state["refresh_token"] = create_refresh_token(user)
-                        st.session_state["remember_login"] = remember
-                        st.rerun()
-                    st.error("Invalid username or password")
-                st.caption("Local admin default: username `admin`, password `credora-admin`.")
-            with register_tab:
-                st.markdown("<h2>Register account</h2><p>Create an uploader workspace for isolated models, scans, reports, and monitoring history.</p>", unsafe_allow_html=True)
-                with st.form("credora-register"):
-                    new_username = st.text_input("Username")
-                    email = st.text_input("Email address", value="")
-                    new_password = st.text_input("Password", type="password")
-                    created = st.form_submit_button("Create account", width="stretch")
-                if created:
-                    try:
-                        user = create_user(new_username, new_password, email or None, role="uploader")
-                    except ValueError as exc:
-                        st.error(str(exc))
-                    else:
-                        st.session_state["auth_user"] = user
-                        st.session_state["access_token"] = create_access_token(user)
-                        st.session_state["refresh_token"] = create_refresh_token(user)
-                        st.rerun()
-            st.markdown('<div class="auth-note"><span>Local Instance</span><div>Documentation · Report an Issue · Release Notes</div></div>', unsafe_allow_html=True)
-    st.stop()
 
 
 current_user = require_dashboard_auth()
@@ -779,55 +618,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    with st.expander("Upload & Analyze Model", expanded=True, icon=":material/upload_file:"):
-        st.caption("Upload a trained classifier and its labeled evaluation evidence.")
-        mode = st.radio(
-            "Assessment source",
-            ["Upload files", "Demo model"],
-            horizontal=True,
-            key="sidebar_assessment_source",
-        )
-        model_path: Path | None = None
-        dataset_path: Path | None = None
-        requirements_path: Path | None = None
-        metadata_path: Path | None = None
-
-        if mode == "Demo model":
-            model_path = SAMPLE_MODEL_DIR / "traffic_rf_v1.joblib"
-            dataset_path = PROCESSED_DATA_DIR / "encrypted_traffic_test.csv"
-            requirements_path = SAMPLE_REQUIREMENTS_DIR / "requirements_demo.txt"
-            metadata_path = METADATA_DIR / "traffic_rf_v1_metadata.json"
-            st.success("Legitimate Random Forest classifier ready")
-        else:
-            model_upload = st.file_uploader(
-                "Trained model (.joblib or .pkl)", type=["joblib", "pkl"], key="sidebar_model_upload"
-            )
-            dataset_upload = st.file_uploader(
-                "Labeled test dataset (.csv)", type=["csv"], key="sidebar_dataset_upload"
-            )
-            requirements_upload = st.file_uploader(
-                "Dependency requirements (.txt)", type=["txt"], key="sidebar_requirements_upload"
-            )
-            metadata_upload = st.file_uploader(
-                "Model metadata (.json)", type=["json"], key="sidebar_metadata_upload"
-            )
-            model_path = persist_upload(model_upload, "models")
-            dataset_path = persist_upload(dataset_upload, "datasets")
-            requirements_path = persist_upload(requirements_upload, "requirements")
-            metadata_path = persist_upload(metadata_upload, "metadata")
-            if st.session_state["scan_require_metadata_hash"] and metadata_path is None:
-                st.caption("Model metadata is required by the current Settings policy.")
-
-        inputs_ready = all([model_path, dataset_path, requirements_path])
-        if st.session_state["scan_require_metadata_hash"]:
-            inputs_ready = inputs_ready and metadata_path is not None
-        run_scan = st.button(
-            "Analyze model now",
-            type="primary",
-            width="stretch",
-            disabled=not inputs_ready,
-            key="sidebar_run_scan",
-        )
+    scan_submission = render_scan_submission(PROJECT_ROOT)
 
     owner_id, include_all = dashboard_owner_scope()
     sidebar_scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
@@ -840,48 +631,7 @@ if page == "Overview":
     render_page_head("Model Trust Overview", "Encrypted Traffic Classification | Security & Reliability")
 
 
-if run_scan:
-    missing = [
-        name
-        for name, value in {
-            "model": model_path,
-            "test dataset": dataset_path,
-            "requirements": requirements_path,
-            **({"metadata": metadata_path} if st.session_state["scan_require_metadata_hash"] else {}),
-        }.items()
-        if value is None or not Path(value).exists()
-    ]
-    if missing:
-        st.error(f"Missing required input(s): {', '.join(missing)}")
-        st.stop()
-
-    render_page_head("Live Model Assessment", "Deep security, behavior, and reliability analysis in progress")
-    progress_bar = st.progress(0, text="Preparing assessment")
-    progress_panel = st.empty()
-    progress_events: list[dict[str, str]] = []
-    assessment_total = 30
-
-    def render_progress(level: str, message: str) -> None:
-        progress_events.append({"level": level, "message": message})
-        progress_bar.progress(min(len(progress_events) / assessment_total, 1.0), text=f"{level}: {message}")
-        with progress_panel.container(border=True):
-            st.markdown("### Assessment activity")
-            for event in progress_events:
-                st.markdown(f"**{event['level']}** &nbsp; {event['message']}")
-
-    report = run_phase1_scan(
-        model_path,
-        dataset_path,
-        requirements_path,
-        metadata_path,
-        progress_callback=render_progress,
-        generate_docx=st.session_state["scan_generate_docx_report"],
-        owner_id=int(current_user["id"]),
-    )
-    progress_bar.progress(1.0, text="Assessment complete")
-    st.session_state["report"] = report.to_dict()
-    st.session_state["progress_events"] = progress_events
-    st.success("Deep trust scan completed. The dashboard now shows model-specific evidence and fixes.")
+execute_scan_submission(scan_submission, current_user, render_page_head)
 
 
 owner_id, include_all = dashboard_owner_scope()
@@ -890,7 +640,7 @@ model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in 
 session_model = st.session_state.get("report", {}).get("model_name")
 if session_model and session_model not in model_names:
     model_names.insert(0, session_model)
-if run_scan and session_model:
+if scan_submission.submitted and session_model:
     selected_model = session_model
 elif selected_model not in model_names:
     selected_model = model_names[0] if model_names else None
@@ -1210,69 +960,12 @@ elif page == "Traffic Classifier":
             elif decision == "approved":
                 st.success(deployment_gate.get("summary", "Production deployment is approved."))
 
-    st.markdown("### Captured Flow Ingestion")
-    with st.container(border=True):
-        capture_col, format_col, window_col = st.columns([1.35, .8, .65])
-        with capture_col:
-            captured_flow_upload = st.file_uploader(
-                "Zeek conn.log or CICFlowMeter CSV",
-                type=["log", "zeek", "csv"],
-                key="captured_flow_upload",
-            )
-        with format_col:
-            captured_format_label = st.selectbox(
-                "Collector format",
-                ["Auto-detect", "Zeek", "CICFlowMeter"],
-                key="captured_flow_format",
-            )
-        with window_col:
-            production_window_size = st.number_input(
-                "Window rows", min_value=25, max_value=10000, value=250, step=25, key="production_window_size"
-            )
-        captured_format = {
-            "Auto-detect": "auto",
-            "Zeek": "zeek",
-            "CICFlowMeter": "cicflowmeter",
-        }[captured_format_label]
-        process_capture = st.button(
-            "Ingest and monitor flows",
-            type="primary",
-            disabled=captured_flow_upload is None,
-            key="process_captured_flows",
-        )
-        if process_capture and captured_flow_upload is not None:
-            try:
-                capture_path = persist_upload(captured_flow_upload, "captures")
-                flow_root = ensure_within_directory(DATA_DIR / "production_flows" / str(current_user["id"]), DATA_DIR)
-                flow_root.mkdir(parents=True, exist_ok=True)
-                canonical_path = ensure_within_directory(flow_root / f"{capture_path.stem}-canonical.csv", flow_root)
-                ingestion = ingest_flow_file(capture_path, canonical_path, captured_format)
-                output_root = ensure_within_directory(DATA_DIR / "production_windows" / str(current_user["id"]), DATA_DIR)
-                window_results = monitor_rolling_windows(
-                    model_name=model_name,
-                    captured_csv_path=canonical_path,
-                    baseline_path=PROCESSED_DATA_DIR / "encrypted_traffic_train.csv",
-                    output_dir=ensure_within_directory(output_root / slugify_filename(model_name), output_root),
-                    window_size=int(production_window_size),
-                    expected_features=classifier_details.get("feature_columns"),
-                    owner_id=int(current_user["id"]),
-                )
-                st.session_state["last_flow_ingestion"] = {
-                    "format": ingestion.source_format,
-                    "rows": ingestion.row_count,
-                    "output": str(ingestion.output_path),
-                    "windows": len(window_results),
-                }
-                st.success(f"Ingested {ingestion.row_count} flows and evaluated {len(window_results)} production window(s).")
-            except (ValueError, OSError) as exc:
-                st.error(f"Captured-flow ingestion failed: {exc}")
-        ingestion_summary = st.session_state.get("last_flow_ingestion")
-        if ingestion_summary:
-            i1, i2, i3 = st.columns(3)
-            i1.metric("Collector", str(ingestion_summary["format"]).title())
-            i2.metric("Flows ingested", ingestion_summary["rows"])
-            i3.metric("Drift windows", ingestion_summary["windows"])
-            st.caption(ingestion_summary["output"])
+    render_flow_ingestion(
+        project_root=PROJECT_ROOT,
+        current_user=current_user,
+        model_name=model_name,
+        classifier_details=classifier_details,
+    )
 
 
 elif page == "Trust Score":
@@ -1313,85 +1006,27 @@ elif page == "Trust Drift":
         feature_drift = drift.get("details", {}).get("feature_drift", [])
         if feature_drift:
             st.dataframe(pd.DataFrame(feature_drift), hide_index=True, width="stretch")
-    production_windows = list_drift_windows(model_name=model_name, limit=100, owner_id=owner_id, include_all=include_all)
-    with st.container(border=True):
-        st.markdown("### Production Drift Windows")
-        if production_windows:
-            production_history = pd.DataFrame(production_windows).sort_values("created_at")
-            production_history["created_at"] = pd.to_datetime(production_history["created_at"])
-            production_trend = px.line(
-                production_history,
-                x="created_at",
-                y="score",
-                markers=True,
-                hover_data=["window_label", "mean_psi", "max_psi", "status"],
-            )
-            production_trend.add_hline(y=80, line_dash="dash", line_color=ORANGE)
-            production_trend.update_traces(line_color=TEAL, line_width=3, marker=dict(size=7))
-            production_trend.update_layout(yaxis_range=[0, 105], xaxis_title="Window", yaxis_title="Drift score", showlegend=False)
-            st.plotly_chart(chart_layout(production_trend, 360), width="stretch", config={"displayModeBar": False})
-            st.dataframe(
-                production_history[["window_label", "row_count", "score", "status", "mean_psi", "max_psi", "created_at"]].sort_values("created_at", ascending=False),
-                hide_index=True,
-                width="stretch",
-            )
-        else:
-            st.info("No captured production windows have been analyzed for this model.")
+    render_production_drift_windows(
+        model_name=model_name,
+        owner_id=owner_id,
+        include_all=include_all,
+        chart_layout=chart_layout,
+        line_color=TEAL,
+        threshold_color=ORANGE,
+    )
 
 
 elif page == "Reports":
-    render_page_head("Reports", "Deployment evidence, exported assessments, and recommended actions")
-    report_phase = "phase3" if deployment_gate else "phase2"
-    safe_model_name = slugify_filename(model_name)
-    report_path = ensure_within_directory((REPORT_DIR / str(current_user["id"]) / f"{safe_model_name}_{report_phase}_trust_report.json"), REPORT_DIR)
-    left, right = st.columns([.9, 1.1])
-    with left:
-        with st.container(border=True):
-            st.markdown("### Generated Artifact")
-            st.markdown(f"<div class='path-box'>{h(report_path)}</div>", unsafe_allow_html=True)
-            st.caption(f"Generated {format_time(generated_at)} | Trust score {trust_score:.1f}/100")
-            st.download_button("Download JSON report", json.dumps(report_data, indent=2), file_name=report_path.name, mime="application/json", width="stretch")
-            docx_report_value = report_data.get("docx_report_path") or (REPORT_DIR / str(current_user["id"]) / f"{safe_model_name}_{report_phase}_trust_report.docx")
-            docx_path = Path(docx_report_value)
-            if docx_path.exists():
-                st.download_button("Download DOCX report", docx_path.read_bytes(), file_name=docx_path.name, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", width="stretch")
-            st.divider()
-            st.markdown("### Report Signature")
-            signature_status = verify_report_against_trusted_signers(report_data, list_trusted_signers())
-            if signature_status.get("trusted"):
-                st.success(f"Verified by trusted signer: {signature_status.get('trusted_signer_name', 'trusted signer')}")
-                st.caption(f"Signed {format_time(signature_status.get('signed_at'))} | Payload {signature_status.get('payload_sha256', '')[:12]}...")
-            elif report_data.get("report_signature"):
-                st.warning(signature_status.get("reason", "Report signature could not be matched to a trusted signer."))
-                signer = report_data.get("report_signature", {}).get("signer")
-                if signer:
-                    st.caption(f"Claimed signer: {h(signer)}")
-            else:
-                st.info("This JSON report has not been signed yet. Use the Phase 4 report-signing command before treating it as release evidence.")
-    with right:
-        with st.container(border=True):
-            st.markdown("### Model-Specific Remediation Plan")
-            st.caption("These actions are generated from this assessment's measured evidence; they are not selectable suggestions.")
-            if remediation_plan:
-                for item in remediation_plan:
-                    st.markdown(f"**{h(item.get('id', 'FIX'))} | {h(item.get('priority', 'P2'))} | {h(item.get('title', 'Corrective action'))}**")
-                    st.markdown(f"**Evidence:** {h(item.get('evidence', ''))}")
-                    st.markdown(f"**Diagnosis:** {h(item.get('diagnosis', ''))}")
-                    st.markdown(f"**Required change:** {h(item.get('fix', ''))}")
-                    st.markdown(f"**Retest condition:** {h(item.get('validation', ''))}")
-                    st.divider()
-            else:
-                st.success("No corrective actions are required by this assessment.")
-    with st.expander("Deep assessment evidence", expanded=False):
-        if analysis_trace:
-            for step in analysis_trace:
-                st.markdown(f"**Step {step.get('step', '')}: {h(module_label(str(step.get('module', ''))))}**")
-                st.write(step.get("method", ""))
-                st.caption(step.get("evidence", ""))
-        else:
-            st.info("Run this model again to add a deep-analysis trace to the report.")
-    with st.expander("Raw assessment JSON"):
-        st.json(report_data)
+    render_reports_page(
+        current_user=current_user,
+        report_data=report_data,
+        deployment_gate=deployment_gate,
+        model_name=model_name,
+        generated_at=generated_at,
+        trust_score=trust_score,
+        remediation_plan=remediation_plan,
+        analysis_trace=analysis_trace,
+    )
 
 
 elif page == "Alerts":
@@ -1428,149 +1063,7 @@ elif page == "Alerts":
 
 
 elif page == "Admin":
-    render_page_head("Admin", "Users, platform visibility, policy, audit, and release controls")
-    if current_user.get("role") not in {"reviewer", "admin"}:
-        st.error("Admin access is not available for this account.")
-        st.stop()
-
-    analytics = platform_analytics()
-    a1, a2, a3, a4 = st.columns(4)
-    a1.metric("Active users", analytics.get("active_users", 0))
-    a2.metric("Models", analytics.get("total_models", 0))
-    a3.metric("Scans", analytics.get("total_scans", 0))
-    dist = analytics.get("trust_score_distribution", {})
-    a4.metric("Warnings / fails", f"{dist.get('warning', 0)} / {dist.get('fail', 0)}")
-
-    tabs = st.tabs(["Users", "Platform Scans", "Policy", "Review", "Security Audit"])
-    with tabs[0]:
-        st.markdown("### User Management")
-        users_df = pd.DataFrame(list_users())
-        if not users_df.empty:
-            st.dataframe(users_df[[c for c in ["id", "username", "email", "role", "created_at", "last_login_at", "disabled"] if c in users_df.columns]], hide_index=True, width="stretch")
-        if current_user.get("role") == "admin":
-            with st.form("admin-create-user"):
-                c1, c2, c3, c4 = st.columns([.8, .9, .8, .6])
-                username = c1.text_input("Username")
-                email = c2.text_input("Email")
-                password = c3.text_input("Temporary password", type="password")
-                role = c4.selectbox("Role", ["uploader", "reviewer", "admin"])
-                if st.form_submit_button("Create user", type="primary"):
-                    try:
-                        create_user(username, password, email or None, role=role)
-                        st.success("User created.")
-                        st.rerun()
-                    except ValueError as exc:
-                        st.error(str(exc))
-            with st.form("admin-update-user"):
-                user_ids = [int(row["id"]) for row in list_users()]
-                target = st.selectbox("Account", user_ids, format_func=lambda uid: next((u["username"] for u in list_users() if int(u["id"]) == uid), str(uid))) if user_ids else None
-                col1, col2, col3 = st.columns(3)
-                new_role = col1.selectbox("New role", ["", "uploader", "reviewer", "admin"])
-                disabled = col2.selectbox("Account status", ["No change", "Active", "Disabled"])
-                reset_password = col3.text_input("Force new password", type="password")
-                revoke = st.checkbox("Revoke active sessions")
-                if st.form_submit_button("Apply account changes") and target is not None:
-                    if new_role:
-                        update_user_role(target, new_role, actor_id=int(current_user["id"]))
-                    if disabled != "No change":
-                        set_user_disabled(target, disabled == "Disabled", actor_id=int(current_user["id"]))
-                    if reset_password:
-                        admin_set_password(target, reset_password, actor_id=int(current_user["id"]))
-                    if revoke:
-                        revoke_user_sessions(target, actor_id=int(current_user["id"]))
-                    st.success("Account updated.")
-                    st.rerun()
-        else:
-            st.info("Reviewer accounts can view platform evidence, but only admins can manage accounts.")
-
-    with tabs[1]:
-        st.markdown("### Platform-Wide Scans")
-        all_scans = pd.DataFrame(list_scans(limit=500, include_all=True))
-        if not all_scans.empty:
-            search = st.text_input("Filter by user id, model, status, or date text")
-            shown = all_scans
-            if search:
-                mask = shown.astype(str).apply(lambda col: col.str.contains(search, case=False, na=False)).any(axis=1)
-                shown = shown[mask]
-            st.dataframe(shown, hide_index=True, width="stretch")
-        findings = analytics.get("common_security_findings", [])
-        if findings:
-            st.markdown("### Common Security Findings")
-            st.dataframe(pd.DataFrame(findings), hide_index=True, width="stretch")
-
-    with tabs[2]:
-        st.markdown("### Server-Side Release Policy")
-        if current_user.get("role") != "admin":
-            st.info("Only admins can change policy, trust weights, signer keys, or taxonomy.")
-        policy = get_deployment_policy()
-        with st.form("deployment-policy"):
-            p1, p2, p3, p4 = st.columns(4)
-            minimum_trust_score = p1.number_input("Minimum trust", 0.0, 100.0, float(policy.get("minimum_trust_score", 85)), 1.0)
-            minimum_classifier_score = p2.number_input("Minimum classifier", 0.0, 100.0, float(policy.get("minimum_classifier_score", 85)), 1.0)
-            minimum_adversarial_score = p3.number_input("Minimum adversarial", 0.0, 100.0, float(policy.get("minimum_adversarial_score", 80)), 1.0)
-            minimum_sensitive_recall = p4.number_input("Minimum sensitive recall", 0.0, 1.0, float(policy.get("minimum_sensitive_recall", 0.90)), 0.01)
-            if st.form_submit_button("Save release policy", disabled=current_user.get("role") != "admin"):
-                set_deployment_policy({
-                    "minimum_trust_score": minimum_trust_score,
-                    "minimum_classifier_score": minimum_classifier_score,
-                    "minimum_adversarial_score": minimum_adversarial_score,
-                    "minimum_sensitive_recall": minimum_sensitive_recall,
-                }, actor_id=int(current_user["id"]))
-                st.success("Policy saved.")
-                st.rerun()
-        weights = get_trust_weights()
-        with st.expander("Trust score module weights"):
-            edited = st.data_editor(pd.DataFrame([{"module": k, "weight": v} for k, v in weights.items()]), hide_index=True, width="stretch")
-            if st.button("Save weights", disabled=current_user.get("role") != "admin"):
-                set_trust_weights(dict(zip(edited["module"], edited["weight"])), actor_id=int(current_user["id"]))
-                st.success("Weights saved and normalized for future scans.")
-                st.rerun()
-        with st.expander("Sensitive label taxonomy"):
-            labels_text = st.text_area("Comma-separated label hints", ", ".join(get_sensitive_label_taxonomy()))
-            if st.button("Save taxonomy", disabled=current_user.get("role") != "admin"):
-                set_sensitive_label_taxonomy([item.strip() for item in labels_text.split(",")], actor_id=int(current_user["id"]))
-                st.success("Sensitive taxonomy saved.")
-                st.rerun()
-        with st.expander("Trusted Ed25519 public signers"):
-            signers = list_trusted_signers(include_inactive=True)
-            if signers:
-                st.dataframe(pd.DataFrame(signers), hide_index=True, width="stretch")
-            with st.form("trusted-signer"):
-                signer_name = st.text_input("Signer name")
-                public_key = st.text_area("Public key PEM")
-                if st.form_submit_button("Add trusted signer", disabled=current_user.get("role") != "admin"):
-                    add_trusted_signer(signer_name, public_key, actor_id=int(current_user["id"]))
-                    st.success("Trusted signer added.")
-                    st.rerun()
-
-    with tabs[3]:
-        st.markdown("### Deployment Gate Override")
-        st.caption("Reviewer/admin approval is required for any manual override.")
-        all_scan_rows = list_scans(limit=500, include_all=True)
-        if all_scan_rows:
-            scan_id = st.selectbox("Scan", [int(row["id"]) for row in all_scan_rows], format_func=lambda sid: next((f"#{row['id']} | user {row.get('owner_id')} | {row.get('model_name')} | {row.get('status')} | {row.get('trust_score')}" for row in all_scan_rows if int(row["id"]) == sid), str(sid)))
-            decision = st.radio("Decision", ["approved", "rejected"], horizontal=True)
-            justification = st.text_area("Required justification")
-            if st.button("Record override decision", type="primary"):
-                try:
-                    create_deployment_override(scan_id, decision, justification, int(current_user["id"]))
-                    st.success("Override decision logged.")
-                except ValueError as exc:
-                    st.error(str(exc))
-        else:
-            st.info("No scans are available for review.")
-
-    with tabs[4]:
-        st.markdown("### Authentication and Security Audit")
-        if current_user.get("role") == "admin":
-            logs = list_audit_logs(limit=300)
-            if logs:
-                st.dataframe(pd.DataFrame(logs), hide_index=True, width="stretch")
-            else:
-                st.info("No audit events have been recorded yet.")
-        else:
-            st.info("Only admins can view authentication and security audit logs.")
-
+    render_admin_page(current_user)
 
 else:
     render_page_head("Settings", "Account, scanner behavior, and owned-data controls")

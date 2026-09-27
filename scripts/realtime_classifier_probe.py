@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import pandas as pd
 
-from core.model_loading import load_checked_model
+from core.model_backend import load_model_backend
 
 
 PROFILE_RANGES = {
@@ -76,7 +76,7 @@ def main() -> None:
     metadata = load_metadata(args.metadata)
     feature_columns = metadata["expected_features"]
     class_labels = metadata.get("class_labels", list(PROFILE_RANGES))
-    model = load_checked_model(args.model)
+    model = load_model_backend(args.model)
 
     print("Realtime Encrypted Traffic Classifier Probe")
     print("=" * 43)

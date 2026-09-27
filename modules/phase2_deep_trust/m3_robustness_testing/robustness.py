@@ -4,10 +4,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score
 
-from core.model_loading import load_checked_model
+from core.model_backend import load_model_backend
 from core.report_schema import Finding, ModuleResult
+
+
+TRIAL_SEEDS = tuple(range(25))
+
+
+def _percentile(values: list[float], percentile: float = 10) -> float:
+    return float(np.percentile(values, percentile))
 
 
 def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None, noise_level: float = 0.05) -> ModuleResult:
@@ -17,7 +24,7 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
     data_file = Path(dataset_path)
 
     try:
-        model = load_checked_model(model_file)
+        model = load_model_backend(model_file)
         data = pd.read_csv(data_file)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("robustness_testing", "fail", 0, "Robustness test could not run.", [Finding("robustness_testing", "Robustness test failed", "high", str(exc), "Verify that model and CSV files are compatible.")])
@@ -36,21 +43,41 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
         return ModuleResult("robustness_testing", "warning", 60, "No numeric traffic features available for perturbation.", [Finding("robustness_testing", "No perturbable features", "medium", "Robustness testing needs numeric flow metadata features.", "Use numeric flow features such as duration, packet count, byte count, and inter-arrival time.")])
 
     baseline_predictions = model.predict(X)
+    baseline_accuracy = accuracy_score(y_true, baseline_predictions)
     baseline_f1 = f1_score(y_true, baseline_predictions, average="weighted", zero_division=0)
 
-    rng = np.random.default_rng(42)
-    perturbed = X.copy()
-    for column in numeric_columns:
-        series = pd.to_numeric(perturbed[column], errors="coerce")
-        scale = series.std()
-        if pd.isna(scale) or scale == 0:
-            scale = max(abs(float(series.mean() or 0)), 1.0)
-        noise = rng.normal(0, scale * noise_level, len(series))
-        perturbed[column] = (series + noise).clip(lower=0)
+    baseline_values = pd.Series(baseline_predictions).astype(str).values
+    trials = []
+    for seed in TRIAL_SEEDS:
+        rng = np.random.default_rng(seed)
+        perturbed = X.copy()
+        for column in numeric_columns:
+            series = pd.to_numeric(perturbed[column], errors="coerce")
+            scale = series.std()
+            if pd.isna(scale) or scale == 0:
+                scale = max(abs(float(series.mean() or 0)), 1.0)
+            noise = rng.normal(0, scale * noise_level, len(series))
+            perturbed[column] = (series + noise).clip(lower=0)
 
-    perturbed_predictions = model.predict(perturbed)
-    perturbed_f1 = f1_score(y_true, perturbed_predictions, average="weighted", zero_division=0)
-    prediction_stability = float(np.mean(pd.Series(baseline_predictions).astype(str).values == pd.Series(perturbed_predictions).astype(str).values))
+        predictions = model.predict(perturbed)
+        trials.append({
+            "seed": seed,
+            "accuracy": float(accuracy_score(y_true, predictions)),
+            "f1": float(f1_score(y_true, predictions, average="weighted", zero_division=0)),
+            "prediction_stability": float(
+                np.mean(pd.Series(predictions).astype(str).values == baseline_values)
+            ),
+        })
+
+    accuracy_values = [trial["accuracy"] for trial in trials]
+    f1_values = [trial["f1"] for trial in trials]
+    stability_values = [trial["prediction_stability"] for trial in trials]
+    mean_accuracy = float(np.mean(accuracy_values))
+    mean_f1 = float(np.mean(f1_values))
+    mean_stability = float(np.mean(stability_values))
+    worst_case_accuracy = _percentile(accuracy_values)
+    perturbed_f1 = _percentile(f1_values)
+    prediction_stability = _percentile(stability_values)
     f1_drop = max(0.0, baseline_f1 - perturbed_f1)
 
     score = round(max(0.0, 100.0 - (f1_drop * 170) - ((1 - prediction_stability) * 65)), 2)
@@ -67,14 +94,30 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
         module="robustness_testing",
         status=status,
         score=score,
-        summary=f"Tested robustness with {noise_level * 100:.1f}% numeric feature perturbation.",
+        summary=f"Tested robustness across {len(TRIAL_SEEDS)} trials with {noise_level * 100:.1f}% numeric feature perturbation.",
         findings=findings,
         details={
             "noise_level": noise_level,
+            "trial_count": len(TRIAL_SEEDS),
+            "lower_percentile": 10,
+            "baseline_accuracy": round(float(baseline_accuracy), 4),
             "baseline_f1": round(float(baseline_f1), 4),
+            "mean_perturbed_accuracy": round(mean_accuracy, 4),
+            "worst_case_accuracy": round(worst_case_accuracy, 4),
+            "mean_perturbed_f1": round(mean_f1, 4),
             "perturbed_f1": round(float(perturbed_f1), 4),
             "f1_drop": round(float(f1_drop), 4),
+            "mean_prediction_stability": round(mean_stability, 4),
             "prediction_stability": round(prediction_stability, 4),
             "perturbed_features": numeric_columns,
+            "trials": [
+                {
+                    "seed": trial["seed"],
+                    "accuracy": round(trial["accuracy"], 4),
+                    "f1": round(trial["f1"], 4),
+                    "prediction_stability": round(trial["prediction_stability"], 4),
+                }
+                for trial in trials
+            ],
         },
     )

@@ -6,11 +6,14 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix
 
-from core.model_loading import load_checked_model
+from core.db import get_sensitive_label_taxonomy
+from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
 
 
-MALICIOUS_LABEL_HINTS = ("malicious", "attack", "suspicious", "botnet", "scan", "dos", "ddos", "intrusion")
+def _sensitive_labels(labels: list[str]) -> list[str]:
+    sensitive_hints = get_sensitive_label_taxonomy()
+    return [label for label in labels if any(hint in label.lower() for hint in sensitive_hints)]
 
 
 def _extract_estimator(model):
@@ -22,19 +25,15 @@ def _extract_estimator(model):
     return model
 
 
-def _feature_importance(model, feature_columns: list[str]) -> list[dict]:
-    estimator = _extract_estimator(model)
-    importances = getattr(estimator, "feature_importances_", None)
-    if importances is None or len(importances) != len(feature_columns):
-        return []
-    ranked = sorted(zip(feature_columns, importances), key=lambda item: item[1], reverse=True)
-    return [{"feature": feature, "importance": round(float(value), 5)} for feature, value in ranked]
+def _feature_importance(model: ModelBackend, feature_columns: list[str]) -> list[dict]:
+    importances = model.feature_importance(feature_columns)
+    return importances or []
 
 
-def _confidence_summary(model, x_test: pd.DataFrame) -> dict:
-    if not hasattr(model, "predict_proba"):
-        return {"available": False}
+def _confidence_summary(model: ModelBackend, x_test: pd.DataFrame) -> dict:
     probabilities = model.predict_proba(x_test)
+    if probabilities is None:
+        return {"available": False}
     if isinstance(probabilities, list):
         probabilities = probabilities[0]
     max_confidence = np.max(probabilities, axis=1)
@@ -52,7 +51,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
     findings: list[Finding] = []
 
     try:
-        model = load_checked_model(model_path)
+        model = load_model_backend(model_path)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(
@@ -104,7 +103,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
         if recall < 0.85 or precision < 0.85 or f1 < 0.85:
             weak_classes.append({"class": label, "precision": round(precision, 4), "recall": round(recall, 4), "f1": round(f1, 4)})
 
-    malicious_labels = [label for label in labels if any(hint in label.lower() for hint in MALICIOUS_LABEL_HINTS)]
+    malicious_labels = _sensitive_labels(labels)
     malicious_weak = [item for item in weak_classes if item["class"] in malicious_labels]
 
     confusion_pairs = []

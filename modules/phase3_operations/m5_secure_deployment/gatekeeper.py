@@ -9,7 +9,10 @@ def _module(results: list[ModuleResult], name: str) -> ModuleResult | None:
 
 
 def evaluate_deployment_gate(
-    results: list[ModuleResult], preliminary_trust_score: float, metadata: dict | None = None
+    results: list[ModuleResult],
+    preliminary_trust_score: float,
+    metadata: dict | None = None,
+    preliminary_trust: ModuleResult | None = None,
 ) -> ModuleResult:
     metadata = metadata or {}
     policy = get_deployment_policy()
@@ -21,7 +24,12 @@ def evaluate_deployment_gate(
     classifier = _module(results, "classifier_evaluation")
     adversarial = _module(results, "adversarial_validation")
     runtime = _module(results, "runtime_integrity")
-    all_findings = [finding for result in results for finding in result.findings]
+    preliminary_missing_findings = [
+        finding
+        for finding in (preliminary_trust.findings if preliminary_trust else [])
+        if finding.module == "trust_score" and finding.title.startswith("Missing ")
+    ]
+    all_findings = [finding for result in results for finding in result.findings] + preliminary_missing_findings
     high_risk = [finding for finding in all_findings if finding.severity in {"critical", "high"}]
     medium_risk = [finding for finding in all_findings if finding.severity == "medium"]
     sensitive_recall = adversarial.details.get("worst_sensitive_recall") if adversarial else None

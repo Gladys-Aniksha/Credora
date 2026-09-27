@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
+import hmac
 import time
 from typing import Any
 from uuid import uuid4
@@ -28,6 +29,7 @@ from core.auth import (
     can_view_all,
     create_access_token,
     create_refresh_token,
+    enforce_auth_rate_limit,
     get_current_user,
     require_role,
     token_user,
@@ -45,6 +47,7 @@ from core.db import (
     delete_scan,
     delete_user_account,
     get_deployment_policy,
+    get_scan_record,
     get_sensitive_label_taxonomy,
     get_trust_weights,
     init_db,
@@ -84,9 +87,9 @@ app.add_middleware(
 
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MAX_ONNX_UPLOAD_BYTES = 50 * 1024 * 1024
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_MAX_REQUESTS = 20
-LOGIN_RATE_LIMIT_MAX_REQUESTS = 5
 _rate_limit_buckets: dict[str, list[float]] = {}
 limiter = Limiter(key_func=get_remote_address) if Limiter and get_remote_address else None
 if limiter:
@@ -157,7 +160,7 @@ async def reject_oversized_requests(request: Request, call_next):
 
 
 def require_api_key(x_credora_api_key: str | None = Header(default=None)) -> None:
-    if x_credora_api_key != API_KEY:
+    if x_credora_api_key is None or not hmac.compare_digest(x_credora_api_key, API_KEY):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Credora API key.")
 
 
@@ -176,7 +179,7 @@ def rate_limit(request: Request) -> None:
 
 
 def login_rate_limit(request: Request) -> None:
-    _rate_limit(request, LOGIN_RATE_LIMIT_MAX_REQUESTS)
+    enforce_auth_rate_limit(request)
 
 
 def _owner_scope(user: dict[str, Any]) -> tuple[int | None, bool]:
@@ -398,14 +401,22 @@ def save_upload(upload: UploadFile, subdir: str, owner_id: int) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     safe_name = Path(upload.filename or "upload.bin").name
     path = ensure_within_directory(folder / f"{uuid4().hex}-{safe_name}", folder)
+    upload_limit = MAX_ONNX_UPLOAD_BYTES if Path(safe_name).suffix.lower() == ".onnx" else MAX_UPLOAD_BYTES
     bytes_written = 0
+    upload_too_large = False
     with path.open("wb") as handle:
         while chunk := upload.file.read(1024 * 1024):
             bytes_written += len(chunk)
-            if bytes_written > MAX_UPLOAD_BYTES:
-                path.unlink(missing_ok=True)
-                raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Upload exceeds Credora size limit.")
+            if bytes_written > upload_limit:
+                upload_too_large = True
+                break
             handle.write(chunk)
+    if upload_too_large:
+        path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Upload exceeds Credora size limit.",
+        )
     return path
 
 

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from core.config import DATA_DIR
-from core.model_loading import load_checked_model
+from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
 from core.security import ensure_within_directory
 
@@ -24,10 +24,10 @@ def _training_dataset_path(metadata: dict) -> Path | None:
         return None
 
 
-def _max_confidence(model, frame: pd.DataFrame) -> np.ndarray | None:
-    if not hasattr(model, "predict_proba"):
-        return None
+def _max_confidence(model: ModelBackend, frame: pd.DataFrame) -> np.ndarray | None:
     probabilities = model.predict_proba(frame)
+    if probabilities is None:
+        return None
     if isinstance(probabilities, list):
         probabilities = probabilities[0]
     return np.max(probabilities, axis=1)
@@ -48,7 +48,7 @@ def assess_privacy_risk(model_path: str | Path, dataset_path: str | Path, metada
         )
 
     try:
-        model = load_checked_model(model_path)
+        model = load_model_backend(model_path)
         train = pd.read_csv(train_path)
         test = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001

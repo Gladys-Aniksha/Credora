@@ -19,24 +19,38 @@ WEIGHTS = {
     "deployment_gate": 0.05,
     "trust_drift_timeline": 0.02,
 }
+FINAL_EXPECTED_MODULES = tuple(WEIGHTS)
+PRE_DEPLOYMENT_EXPECTED_MODULES = tuple(
+    module for module in FINAL_EXPECTED_MODULES if module not in {"deployment_gate", "trust_drift_timeline"}
+)
 
 
-def calculate_trust_score(results: list[ModuleResult]) -> ModuleResult:
+def calculate_trust_score(
+    results: list[ModuleResult],
+    expected_modules: tuple[str, ...] = FINAL_EXPECTED_MODULES,
+) -> ModuleResult:
     by_module = {result.module: result for result in results if result.module != "trust_score"}
     weighted_score = 0.0
     total_weight = 0.0
     findings: list[Finding] = []
+    scored_modules: list[str] = []
+    missing_modules: list[str] = []
 
     active_weights = get_trust_weights()
-    for module, weight in active_weights.items():
+    for module in expected_modules:
+        weight = active_weights[module]
         result = by_module.get(module)
         if result is None:
-            findings.append(Finding("trust_score", f"Missing {module}", "medium", f"{module} did not run.", "Run the full trust scan."))
+            missing_modules.append(module)
+            findings.append(Finding("trust_score", f"Missing {module}", "high", f"{module} did not run.", "Run the full trust scan."))
             continue
+        scored_modules.append(module)
         weighted_score += result.score * weight
         total_weight += weight
 
-    final_score = weighted_score / total_weight if total_weight else 0.0
+    normalized_score = weighted_score / total_weight if total_weight else 0.0
+    module_coverage = len(scored_modules) / len(expected_modules) if expected_modules else 0.0
+    final_score = normalized_score * module_coverage
     deployment_gate = by_module.get("deployment_gate")
     gate_decision = deployment_gate.details.get("decision") if deployment_gate else None
     if gate_decision == "blocked":
@@ -68,7 +82,14 @@ def calculate_trust_score(results: list[ModuleResult]) -> ModuleResult:
         score=round(final_score, 2),
         summary=summary,
         findings=findings,
-        details={"weights": active_weights, "modules_scored": list(by_module.keys()), "deployment_decision": gate_decision},
+        details={
+            "weights": active_weights,
+            "expected_modules": list(expected_modules),
+            "modules_scored": scored_modules,
+            "missing_modules": missing_modules,
+            "module_coverage": round(module_coverage, 4),
+            "deployment_decision": gate_decision,
+        },
     )
 
 

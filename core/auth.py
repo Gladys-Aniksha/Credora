@@ -7,9 +7,10 @@ import hmac
 import json
 import os
 import secrets
+import time
 from typing import Any
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
 from core.config import API_KEY
@@ -31,9 +32,29 @@ ACCESS_TOKEN_MINUTES = int(os.getenv("CREDORA_ACCESS_TOKEN_MINUTES", "45"))
 REFRESH_TOKEN_DAYS = int(os.getenv("CREDORA_REFRESH_TOKEN_DAYS", "7"))
 SERVICE_USER_ID = 0
 SERVICE_USER = {"id": SERVICE_USER_ID, "username": "service-admin", "role": "admin", "email": None}
+AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
+AUTH_RATE_LIMIT_MAX_REQUESTS = 5
+_auth_rate_limit_buckets: dict[str, list[float]] = {}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") if CryptContext else None
+
+
+def enforce_auth_rate_limit(request: Request) -> None:
+    identity = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    bucket = [
+        seen
+        for seen in _auth_rate_limit_buckets.get(identity, [])
+        if now - seen < AUTH_RATE_LIMIT_WINDOW_SECONDS
+    ]
+    if len(bucket) >= AUTH_RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Credora authentication rate limit exceeded.",
+        )
+    bucket.append(now)
+    _auth_rate_limit_buckets[identity] = bucket
 
 
 def hash_password(password: str) -> str:
@@ -57,6 +78,9 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
     actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 240_000).hex()
     return hmac.compare_digest(actual, expected)
+
+
+DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
 
 
 def _expiry(minutes: int | None = None, days: int | None = None) -> datetime:
@@ -140,10 +164,22 @@ def token_user(token: str, *, expected_type: str = "access") -> dict[str, Any]:
 
 
 def get_current_user(
+    request: Request,
     token: str | None = Depends(oauth2_scheme),
     x_credora_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    if x_credora_api_key == API_KEY:
+    if x_credora_api_key is not None:
+        from core.db import log_audit_event
+
+        enforce_auth_rate_limit(request)
+        audit_details = {
+            "client": request.client.host if request.client else "unknown",
+            "path": request.url.path,
+        }
+        if not hmac.compare_digest(x_credora_api_key, API_KEY):
+            log_audit_event(None, "auth.service_key_rejected", "service", SERVICE_USER["username"], audit_details)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Credora API key")
+        log_audit_event(None, "auth.service_key_used", "service", SERVICE_USER["username"], audit_details)
         return SERVICE_USER
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")

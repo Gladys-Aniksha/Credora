@@ -16,13 +16,42 @@ For the repeatable Phase 3 command set, see `docs/PHASE3_RUNBOOK.md`.
 
 Credora now supports username/password login for the dashboard and bearer-token authentication for the API. Each user owns their uploaded files, model registry entries, scan history, reports, drift windows, runtime integrity records, and alerts. Uploaders only see their own data; reviewers and admins can enable all-user visibility for review workflows.
 
-Local bootstrap credentials are created only when the registry has no users: `admin` / `credora-admin`. For real use, set `CREDORA_BOOTSTRAP_ADMIN`, `CREDORA_BOOTSTRAP_EMAIL`, `CREDORA_BOOTSTRAP_PASSWORD`, and `CREDORA_JWT_SECRET` in a local `.env` file or shell environment, then run:
+`CREDORA_API_KEY` is required in every environment; Credora will refuse to start if it is missing. For local development, generate separate random values with `python -c "import secrets; print(secrets.token_urlsafe(48))"`, then place them in a gitignored `.env` file:
+
+```dotenv
+CREDORA_API_KEY=<generated service API key>
+CREDORA_JWT_SECRET=<different generated JWT secret>
+```
+
+Never commit the `.env` file or reuse these values outside their intended deployment.
+
+## Local Setup
+
+For local development only, Credora creates a bootstrap administrator when the registry has no users. The default username is `admin` and the default password is `credora-admin`. Override these defaults before shared or deployed use by setting `CREDORA_BOOTSTRAP_ADMIN`, `CREDORA_BOOTSTRAP_EMAIL`, and `CREDORA_BOOTSTRAP_PASSWORD` in the same gitignored `.env` file or shell environment, then run:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\migrate_add_users.py --show-users
 ```
 
 The auth scheme assumes TLS when deployed beyond localhost. A JWT bearer token over plain HTTP should be treated as exposed.
+
+## Supported Model Formats
+
+Credora accepts flat, tabular classifiers in three formats:
+
+- scikit-learn-compatible `.joblib` and `.pkl` artifacts, loaded only after pickle allow-list inspection and an isolated deserialization preflight;
+- ONNX `.onnx` artifacts, structurally validated with `onnx.checker` and executed with ONNX Runtime's CPU provider;
+- signed `.credora` packages for production-style integrity and provenance verification.
+
+ONNX support uses the same evaluation, robustness, drift, explainability, privacy, behavior, adversarial, trust-scoring, and deployment-gate workflow as sklearn models. ONNX uploads are limited to 50 MB.
+
+Raw PyTorch and TensorFlow checkpoints are intentionally unsupported. PyTorch checkpoints can reopen the pickle remote-code-execution risk that Credora's secured sklearn loader is designed to contain, while raw framework checkpoints also require preprocessing and sequence-model evaluation behavior outside this tabular-classifier scope.
+
+To rebuild the sample ONNX model from the sample Random Forest:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\build_test_onnx_model.py
+```
 
 ---
 
@@ -295,7 +324,7 @@ Data lives in multiple places on purpose because they represent different stages
 |---|---|
 | `data/raw/` | Original encrypted traffic datasets or uploaded test files |
 | `data/processed/` | Cleaned flow-feature CSV files used for model training and evaluation |
-| `data/sample_models/` | Demo classifier models such as `traffic_rf_v1.pkl` and `traffic_rf_v2.pkl` |
+| `data/sample_models/` | Demo classifier models such as `traffic_rf_v1.joblib` and `traffic_rf_v1.onnx` |
 | `data/tool_configs/` | Sample MCP/tool/plugin configuration files for toolchain risk scanning |
 | `reports/` | Generated model cards, trust reports, and signed reports |
 
@@ -326,7 +355,7 @@ Data lives in multiple places on purpose because they represent different stages
 
 | Input | Example | Purpose |
 |---|---|---|
-| Trained model | `traffic_rf_v3.pkl` | Model artifact to verify and evaluate |
+| Trained model | `traffic_rf_v1.joblib` or `traffic_rf_v1.onnx` | Model artifact to verify and evaluate |
 | Test dataset | `encrypted_traffic_test.csv` | Flow-feature data for classifier evaluation |
 | Dependencies | `requirements.txt` | Package vulnerability scanning |
 | Metadata | `model_metadata.json` | Model name, version, dataset, algorithm, owner |
@@ -357,7 +386,7 @@ This is a solo project, so the build order matters. The first complete version s
 | Dashboard | Streamlit |
 | Backend | FastAPI, Pydantic, Uvicorn |
 | Database | SQLite for MVP, PostgreSQL later, SQLAlchemy |
-| ML / ETC classifier | pandas, numpy, scikit-learn, joblib, XGBoost optional |
+| ML / ETC classifier | pandas, numpy, scikit-learn, joblib, ONNX, ONNX Runtime, XGBoost optional |
 | Explainability | scikit-learn feature importance, SHAP optional |
 | Dependency scanning | `pip-audit`, OSV API, packaging |
 | Security utilities | hashlib, cryptography, filetype/python-magic |
@@ -665,7 +694,7 @@ Corrective actions are generated from the current report evidence, not selected 
 
 Phase 3 is complete for the project scope. The scanner now covers pre-deployment assessment and post-deployment operational monitoring.
 
-Raw `.joblib` and `.pkl` assessments are intentionally capped at `70/100` until a signed package is verified. The signed `.credora` packaging workflow is the production-style path used by CI and release automation; it verifies an external Ed25519 signature, checks artifact hashes, and then runs the release gate with the trusted package evidence.
+Unsigned `.joblib`, `.pkl`, and `.onnx` assessments are intentionally capped at `70/100` until a signed package is verified. The signed `.credora` packaging workflow is the production-style path used by CI and release automation; it verifies an external Ed25519 signature, checks artifact hashes, and then runs the release gate with the trusted package evidence.
 
 The real-model evasive validation profile scores `62.03/100` and is **blocked**. It produces `0.0` recall for `Suspicious`, confuses all 75 suspicious flows as `VPN`, detects high drift across all eight model features, and fails five production gate checks. This proves the scanner produces materially different evidence and fixes when model behavior becomes unsafe.
 

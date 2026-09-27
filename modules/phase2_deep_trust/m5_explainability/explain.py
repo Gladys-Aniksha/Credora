@@ -5,39 +5,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from core.model_loading import load_checked_model
+from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
 
 
-def _extract_estimator(model):
-    if hasattr(model, "named_steps"):
-        for name in ["classifier", "model", "estimator", "rf"]:
-            if name in model.named_steps:
-                return model.named_steps[name]
-        return list(model.named_steps.values())[-1]
-    return model
-
-
-def _native_importance(estimator, feature_columns: list[str]) -> tuple[list[dict], list[Finding]]:
-    findings: list[Finding] = []
-    importances = getattr(estimator, "feature_importances_", None)
-    if importances is None:
-        return [], findings
-    if len(importances) != len(feature_columns):
-        transformed_count = len(importances)
-        top_features = [{"feature": f"transformed_feature_{idx}", "importance": round(float(value), 5)} for idx, value in enumerate(importances[:20])]
-        findings.append(Finding("explainability", "Feature names transformed by pipeline", "low", f"Model exposes {transformed_count} transformed feature importance value(s).", "For full feature names, store preprocessing output feature names in metadata."))
-        return top_features, findings
-    ranked = sorted(zip(feature_columns, importances), key=lambda item: item[1], reverse=True)
-    return [{"feature": name, "importance": round(float(value), 5)} for name, value in ranked[:20]], findings
-
-
-def _shap_importance(model, x_sample: pd.DataFrame) -> tuple[list[dict], str]:
+def _shap_importance(model: ModelBackend, x_sample: pd.DataFrame) -> tuple[list[dict], str]:
     import shap
 
     background = x_sample.head(min(len(x_sample), 50))
     explained = x_sample.head(min(len(x_sample), 100))
-    prediction_fn = model.predict_proba if hasattr(model, "predict_proba") else model.predict
+
+    def prediction_fn(values) -> np.ndarray:
+        frame = values if isinstance(values, pd.DataFrame) else pd.DataFrame(values, columns=x_sample.columns)
+        probabilities = model.predict_proba(frame)
+        return probabilities if probabilities is not None else model.predict(frame)
+
     explainer = shap.Explainer(prediction_fn, background)
     values = explainer(explained)
     raw_values = values.values
@@ -56,7 +38,7 @@ def explain_model(model_path: str | Path, dataset_path: str | Path, metadata: di
     metadata = metadata or {}
     findings: list[Finding] = []
     try:
-        model = load_checked_model(model_path)
+        model = load_model_backend(model_path)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("explainability", "fail", 0, "Explainability could not run.", [Finding("explainability", "Explainability failed", "high", str(exc), "Use a supported scikit-learn model with readable feature metadata.")])
@@ -67,9 +49,11 @@ def explain_model(model_path: str | Path, dataset_path: str | Path, metadata: di
     if not feature_columns:
         return ModuleResult("explainability", "fail", 0, "No feature columns were available for explanation.", [Finding("explainability", "Missing feature columns", "critical", "The uploaded dataset does not contain the expected feature columns.", "Upload a compatible dataset or fix expected_features metadata.")])
 
-    estimator = _extract_estimator(model)
-    top_features, native_findings = _native_importance(estimator, feature_columns)
-    findings.extend(native_findings)
+    top_features = model.feature_importance(feature_columns) or []
+    top_features = [
+        {"feature": str(item["feature"]), "importance": round(float(item["importance"]), 5)}
+        for item in top_features[:20]
+    ]
     method = "feature_importances_" if top_features else "not_available"
 
     if not top_features:
@@ -99,7 +83,7 @@ def explain_model(model_path: str | Path, dataset_path: str | Path, metadata: di
         findings.append(Finding("explainability", "Feature importance available", "info", "The model exposes usable feature-importance evidence."))
 
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
-    method_label = "model-agnostic SHAP" if method == "shap" else f"native {estimator.__class__.__name__}"
+    method_label = "model-agnostic SHAP" if method == "shap" else "native model"
     return ModuleResult(
         module="explainability",
         status=status,

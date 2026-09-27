@@ -27,6 +27,25 @@ def test_adversarial_validation_runs_three_real_model_scenarios() -> None:
         "sensitive_flow_evasion",
         "sensor_feature_dropout",
     }
+    assert result.details["trial_count"] == 25
+    for scenario in result.details["scenarios"]:
+        assert scenario["trial_count"] == 25
+        assert len(scenario["trials"]) == 25
+        assert len({trial["seed"] for trial in scenario["trials"]}) == 25
+        assert scenario["f1"] <= scenario["mean_f1"]
+        assert scenario["accuracy"] <= scenario["mean_accuracy"]
+        assert scenario["prediction_stability"] <= scenario["mean_prediction_stability"]
+
+    details = result.details
+    expected_score = (
+        100.0
+        - (details["max_f1_drop"] * 90)
+        - ((1 - details["minimum_prediction_stability"]) * 35)
+        - (max(0.0, details["baseline_sensitive_recall"] - details["worst_sensitive_recall"]) * 45)
+        - details["absolute_f1_penalty"]
+        - details["absolute_sensitive_recall_penalty"]
+    )
+    assert result.score == round(max(0.0, min(expected_score, 100.0)), 2)
 
 
 def test_adversarial_validation_scores_evasive_sensitive_flows_as_high_risk(tmp_path) -> None:

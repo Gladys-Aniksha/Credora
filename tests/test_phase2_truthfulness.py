@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 from modules.phase2_deep_trust.m10_dataset_leakage.leakage import check_dataset_leakage
 from modules.phase2_deep_trust.m11_privacy_risk.privacy import assess_privacy_risk
+from modules.phase2_deep_trust.m3_robustness_testing.robustness import test_robustness as run_robustness
 
 
 def _write_model_and_data(tmp_path: Path) -> tuple[Path, Path, Path, dict]:
@@ -52,3 +53,23 @@ def test_privacy_risk_reports_confidence_evidence(tmp_path) -> None:
     assert result.details["confidence_available"] is True
     assert "confidence_gap" in result.details
     assert result.findings
+
+
+def test_robustness_reports_multi_seed_trial_distribution(tmp_path) -> None:
+    model_path, _train_path, test_path, metadata = _write_model_and_data(tmp_path)
+
+    result = run_robustness(model_path, test_path, metadata)
+
+    assert result.details["trial_count"] == 25
+    assert len(result.details["trials"]) == 25
+    assert len({trial["seed"] for trial in result.details["trials"]}) == 25
+    assert result.details["perturbed_f1"] <= result.details["mean_perturbed_f1"]
+    assert result.details["worst_case_accuracy"] <= result.details["mean_perturbed_accuracy"]
+    assert result.details["prediction_stability"] <= result.details["mean_prediction_stability"]
+    expected_score = round(max(
+        0.0,
+        100.0
+        - (result.details["f1_drop"] * 170)
+        - ((1 - result.details["prediction_stability"]) * 65),
+    ), 2)
+    assert result.score == expected_score
