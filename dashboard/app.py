@@ -31,23 +31,24 @@ from dashboard.pages.admin import render_admin_page
 from dashboard.pages.auth import require_dashboard_auth
 from dashboard.pages.production_monitoring import render_flow_ingestion, render_production_drift_windows
 from dashboard.pages.reports import render_reports_page
+from dashboard.theme import inject_credora_theme
 
 
 st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="expanded")
 
-TEAL = "#84B179"
-NAVY = "#283327"
-ORANGE = "#C98A3D"
-RED = "#A93F3F"
+TEAL = "#A23438"
+NAVY = "#201A1A"
+ORANGE = "#C67836"
+RED = "#A23438"
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
 SEVERITY_COLORS = {
-    "critical": "#A93F3F",
-    "high": "#C75B45",
+    "critical": "#A23438",
+    "high": "#BB5E61",
     "medium": ORANGE,
-    "low": "#4F7F74",
-    "info": "#5D9660",
+    "low": "#526D7A",
+    "info": "#2F7252",
 }
-STATUS_COLORS = {"pass": "#5D9660", "warning": ORANGE, "fail": "#A93F3F", "not_run": "#7B8578"}
+STATUS_COLORS = {"pass": "#2F8158", "warning": ORANGE, "fail": "#A23438", "not_run": "#8B817F"}
 
 for setting_key, default_value in {
     "scan_show_info_findings": False,
@@ -405,6 +406,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+inject_credora_theme()
 
 
 def safe_score(value: object, default: float = 0.0) -> float:
@@ -470,8 +472,11 @@ def chart_layout(fig: go.Figure, height: int) -> go.Figure:
         margin=dict(l=12, r=12, t=12, b=12),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Arial, sans-serif", color="#28364f", size=12),
+        font=dict(family="Inter, Arial, sans-serif", color="#514847", size=12),
+        hoverlabel=dict(bgcolor="#fffdfb", bordercolor="#d99c97", font_color="#201a1a"),
     )
+    fig.update_xaxes(gridcolor="#f0e4de", linecolor="#eadbd4", zerolinecolor="#eadbd4")
+    fig.update_yaxes(gridcolor="#f0e4de", linecolor="#eadbd4", zerolinecolor="#eadbd4")
     return fig
 
 
@@ -602,10 +607,13 @@ current_user = require_dashboard_auth()
 
 with st.sidebar:
     st.markdown(
-        "<div class='brand'><div class='brand-mark'>C</div><div class='brand-title'><strong>Credora</strong><span>Model Assurance</span></div></div>",
+        "<div class='brand'><div class='brand-mark'>C</div><div class='brand-title'><strong>CREDORA</strong><span>Model Assurance</span></div></div>",
         unsafe_allow_html=True,
     )
-    st.caption(f"Signed in as {current_user['username']} | {current_user['role']}")
+    st.markdown(
+        f"<div class='sidebar-user'><strong>{h(current_user['username'])}</strong>{h(current_user['role']).title()} workspace</div>",
+        unsafe_allow_html=True,
+    )
     if can_view_all(current_user):
         st.toggle("Show all users' scans", key="show_all_users", value=bool(st.session_state.get("show_all_users", False)))
     if st.button("Logout", width="stretch"):
@@ -627,8 +635,20 @@ with st.sidebar:
     st.caption("Credora v2.0")
 
 
+initials = "".join(part[:1].upper() for part in str(current_user.get("username", "User")).split()[:2]) or "CU"
+st.markdown(
+    f"""
+    <div class="workspace-bar">
+      <div class="workspace-search">Search models, assessments, or reports...</div>
+      <div class="workspace-user"><span class="workspace-avatar">{h(initials)}</span><div><strong>{h(current_user.get('username', 'Credora user'))}</strong>{h(str(current_user.get('role', 'uploader')).title())}</div></div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 if page == "Overview":
-    render_page_head("Model Trust Overview", "Encrypted Traffic Classification | Security & Reliability")
+    render_page_head("Model Trust Overview", "Monitor, assess, and ensure the trustworthiness of your AI models.")
 
 
 execute_scan_submission(scan_submission, current_user, render_page_head)
@@ -692,30 +712,32 @@ if page == "Overview":
           <div>
             <div class="eyebrow">Deployment readiness</div>
             <div class="readiness-main">
-              <div class="shield">{readiness_icon}</div>
               <div><h2>{h(readiness)}</h2><p>{h(readiness_note)}</p></div>
               <div class="approval"><span class="approval-badge">{h(approval)}</span><div class="evaluated">Last evaluated:<br>{h(format_time(generated_at))}</div></div>
             </div>
           </div>
-          <div class="model-summary">
-            <div class="label">Active Model</div>
-            <div class="model-name">{h(model_name)}</div>
-            <div class="active-pill">Active</div>
+          <div class="readiness-checks">
+            <div class="readiness-check"><b>&#10003;</b><span>Security assessment completed</span></div>
+            <div class="readiness-check"><b>&#10003;</b><span>{counts.get('critical', 0)} critical risks detected</span></div>
+            <div class="readiness-check"><b>&#10003;</b><span>Trust score measured against policy</span></div>
+            <div class="readiness-check"><b>&#10003;</b><span>Model integrity evidence captured</span></div>
           </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
 
-    integrity_value = "Verified" if verification.get("status") == "pass" else "Review"
+    integrity_value = safe_score(verification.get("score"))
+    dependency_risk = max(0.0, 100.0 - safe_score(deps.get("score")))
+    assurance_tier = "A" if trust_score >= 85 else "B" if trust_score >= 70 else "C" if trust_score >= 50 else "D"
     score_note = "Excellent" if trust_score >= 90 else "Good" if trust_score >= 75 else "Needs review"
     st.markdown(
         f"""
         <div class="metric-grid">
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon">TS</span>Trust Score</div><div class="metric-value">{trust_score:.1f}<span style="font-size:.9rem;font-weight:500;color:#657087">/100</span></div><div class="metric-note good">{h(score_note)}</div></div>
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon">F1</span>F1 Score</div><div class="metric-value">{f1_pct:.1f}%</div><div class="metric-note good">Weighted classifier performance</div></div>
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon">MI</span>Model Integrity</div><div class="metric-value teal">{h(integrity_value)}</div><div class="metric-note">SHA-256 captured | artifact inspected</div></div>
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon warn">DR</span>Dependency Risk</div><div class="metric-value {h(dep_tone)}">{h(dep_level)}</div><div class="metric-note">{dep_count} actionable finding(s)</div></div>
+          <div class="metric-card"><div class="metric-title"><span class="metric-icon">TS</span>Trust Score</div><div class="metric-value">{trust_score:.1f}<span style="font-size:.82rem;font-weight:500;color:#716867"> / 100</span></div><div class="metric-note good">{h(score_note)} · {h(model_name)}</div></div>
+          <div class="metric-card"><div class="metric-title"><span class="metric-icon good">MI</span>Model Integrity</div><div class="metric-value teal">{integrity_value:.0f}<span style="font-size:.82rem;font-weight:500;color:#716867"> / 100</span></div><div class="metric-note">SHA-256 and signature evidence</div></div>
+          <div class="metric-card"><div class="metric-title"><span class="metric-icon warn">DR</span>Dependency Risk</div><div class="metric-value orange">{dependency_risk:.0f}<span style="font-size:.82rem;font-weight:500;color:#716867"> / 100</span></div><div class="metric-note">{dep_count} actionable finding(s) · {h(dep_level)}</div></div>
+          <div class="metric-card"><div class="metric-title">Model Assurance Tier</div><div class="tier-ring" data-tier="{h(assurance_tier)}"></div><div class="metric-value">Tier {h(assurance_tier)}</div><div class="metric-note">Calibrated from all trust modules</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -733,7 +755,7 @@ if page == "Overview":
                 y="Relative volume",
                 color="Flow class",
                 markers=True,
-                color_discrete_map={"Normal": "#84B179", "Suspicious": "#446832", "Masked / VPN": "#37675C"},
+                color_discrete_map={"Normal": "#A23438", "Suspicious": "#BB5E61", "Masked / VPN": "#2F7252"},
             )
             line.update_traces(line_width=2.7, marker=dict(size=6), hovertemplate="%{fullData.name}<br>%{x}: %{y:.1f}<extra></extra>")
             normal_area = telemetry[telemetry["Flow class"] == "Normal"]
@@ -743,7 +765,7 @@ if page == "Overview":
                 mode="lines",
                 line=dict(width=0),
                 fill="tozeroy",
-                fillcolor="rgba(132,177,121,0.16)",
+                fillcolor="rgba(217,156,151,0.22)",
                 hoverinfo="skip",
                 showlegend=False,
             ))
@@ -751,7 +773,7 @@ if page == "Overview":
                 yaxis_title="Relative flow volume",
                 xaxis_title=None,
                 legend=dict(orientation="h", y=1.12, x=1, xanchor="right", bgcolor="rgba(0,0,0,0)"),
-                yaxis=dict(showgrid=True, gridcolor="#d9e6d4", zeroline=False),
+                yaxis=dict(showgrid=True, gridcolor="#f0e4de", zeroline=False),
                 xaxis=dict(showgrid=False),
             )
             st.plotly_chart(chart_layout(line, 390), width="stretch", config={"displayModeBar": False})
@@ -848,7 +870,14 @@ elif page == "Traffic Classifier":
     with left:
         with st.container(border=True):
             st.markdown("### Performance")
-            bars = px.bar(metric_df, x="Metric", y="Value", text="Value", color="Metric", color_discrete_sequence=["#84B179", "#4F7F74", "#C98A3D", "#37675C"])
+            bars = px.bar(
+                metric_df,
+                x="Metric",
+                y="Value",
+                text="Value",
+                color="Metric",
+                color_discrete_sequence=["#A23438", "#BB5E61", "#D99C97", "#2F7252"],
+            )
             bars.update_traces(texttemplate="%{text:.3f}", textposition="outside")
             bars.update_layout(yaxis_range=[0, 1.08], showlegend=False)
             st.plotly_chart(chart_layout(bars, 330), width="stretch", config={"displayModeBar": False})

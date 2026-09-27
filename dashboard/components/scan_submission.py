@@ -33,7 +33,7 @@ def persist_upload(uploaded: object, subdir: str, project_root: Path) -> Path | 
 
 
 def render_scan_submission(project_root: Path) -> ScanSubmission:
-    with st.expander("Upload & Analyze Model", expanded=True, icon=":material/upload_file:"):
+    with st.expander("Upload & Analyze Model", expanded=False, icon=":material/upload_file:"):
         st.caption("Upload a trained classifier and its labeled evaluation evidence.")
         mode = st.radio(
             "Assessment source",
