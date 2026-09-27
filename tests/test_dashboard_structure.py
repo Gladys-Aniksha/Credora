@@ -54,3 +54,15 @@ def test_extracted_dashboard_sections_have_stable_entry_points() -> None:
     for path, function_names in expected_functions.items():
         assert path.exists()
         assert function_names <= _function_names(path)
+
+
+def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> None:
+    theme_source = (DASHBOARD_ROOT / "theme.py").read_text(encoding="utf-8")
+    auth_source = (DASHBOARD_ROOT / "pages" / "auth.py").read_text(encoding="utf-8")
+    hero_path = DASHBOARD_ROOT / "assets" / "login-hero.png"
+
+    assert hero_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert "login-hero.png" in theme_source
+    assert "st.form(\"credora-login\")" in auth_source
+    assert "st.form(\"credora-register\")" in auth_source
+    assert "st.tabs" not in auth_source

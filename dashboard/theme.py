@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import base64
+from pathlib import Path
+
 import streamlit as st
 
 
 def inject_credora_theme() -> None:
-    st.markdown(
-        """
+    hero_path = Path(__file__).resolve().parent / "assets" / "login-hero.png"
+    hero_data = base64.b64encode(hero_path.read_bytes()).decode("ascii")
+    css = """
         <style>
+        __CREDORA_THEME__
+        </style>
+    """
+    st.markdown(
+        css.replace(
+            "__CREDORA_THEME__",
+            """
         :root {
             --background: #fbf8f5;
             --canvas: #fffdfb;
@@ -283,7 +294,7 @@ def inject_credora_theme() -> None:
         .stApp:has(#credora-login-mode) header[data-testid="stHeader"],
         .stApp:has(#credora-login-mode) [data-testid="stSidebar"] {display: none;}
         .stApp:has(#credora-login-mode) [data-testid="stMainBlockContainer"] {max-width: none; padding: 0; margin: 0;}
-        .stApp:has(#credora-login-mode) [data-testid="stMain"] {min-height: 100vh;}
+        .stApp:has(#credora-login-mode) [data-testid="stMain"] {min-height: calc(100vh + 3.5rem); margin-top: -3.5rem;}
         .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {gap: 0; align-items: stretch;}
         .stApp:has(#credora-login-mode) [data-testid="column"] {padding: 0;}
         #credora-login-mode {display: none;}
@@ -319,7 +330,7 @@ def inject_credora_theme() -> None:
         .login-signature {position: relative; z-index: 1; color: rgba(255,255,255,.88); font-size: .68rem; text-transform: uppercase; letter-spacing: .22em; line-height: 1.7;}
 
         .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fcfaf8; padding: 5vh 7vw;}
-        .stApp:has(#credora-auth-card) [data-testid="stVerticalBlockBorderWrapper"]:has(#credora-auth-card) {
+        .stApp:has(#credora-login-mode) [data-testid="stVerticalBlockBorderWrapper"] {
             width: min(620px, 100%);
             border: 1px solid var(--border) !important;
             border-radius: 8px !important;
@@ -336,6 +347,92 @@ def inject_credora_theme() -> None:
         .stApp:has(#credora-auth-card) .stFormSubmitButton button {min-height: 52px; width: 100%; font-size: 1rem;}
         .secure-access {margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: .78rem;}
 
+        /* Exact translation of the supplied Tailwind login reference. */
+        .stApp:has(#credora-login-mode) {background: #faf9f7;}
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {min-height: 100vh;}
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px clamp(28px, 4vw, 64px);
+            box-sizing: border-box;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] > div:nth-child(2) > div {
+            width: 100%;
+            max-width: 460px;
+            margin: auto;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="column"]:first-child {width: 56% !important; flex: 0 0 56% !important;}
+        .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {
+            width: 44% !important;
+            flex: 0 0 44% !important;
+            min-height: 100vh;
+            padding: 48px clamp(28px, 4vw, 64px);
+            background: #faf9f7;
+        }
+        .login-panel {
+            min-height: 100vh;
+            padding: 0;
+            background-image: url("__LOGIN_HERO__");
+            background-size: cover;
+            background-position: left top;
+            background-repeat: no-repeat;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stVerticalBlockBorderWrapper"] {
+            width: min(460px, 100%) !important;
+            max-width: 460px !important;
+            flex: 0 0 auto !important;
+            margin: auto !important;
+            border: 1px solid rgba(245,245,244,.92) !important;
+            border-radius: 24px !important;
+            background: #ffffff;
+            padding: clamp(28px, 3vw, 40px);
+            box-shadow: 0 20px 40px -15px rgba(0,0,0,.05), 0 0 1px 1px rgba(0,0,0,.03);
+        }
+        .auth-heading {margin-bottom: 24px;}
+        .auth-heading h2 {font-size: clamp(1.9rem, 2.4vw, 2.15rem); line-height: 1.2; color: #0f172a; margin: 0; font-weight: 700;}
+        .auth-heading p {font-size: .91rem; line-height: 1.65; color: #64748b; margin: 10px 0 0;}
+        .stApp:has(#credora-auth-card) [data-testid="stForm"] {border: 0; padding: 0;}
+        .stApp:has(#credora-auth-card) .stTextInput {margin-bottom: 2px;}
+        .stApp:has(#credora-auth-card) .stTextInput label p,
+        .stApp:has(#credora-auth-card) .stCheckbox label p {font-size: .8rem; color: #334155; font-weight: 500;}
+        .stApp:has(#credora-auth-card) .stTextInput input {
+            min-height: 44px;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 8px !important;
+            background: #fff !important;
+            color: #0f172a;
+            font-size: .875rem;
+        }
+        .stApp:has(#credora-auth-card) .stTextInput input:focus {border-color: #932d32 !important; box-shadow: 0 0 0 1px #932d32 !important;}
+        .stApp:has(#credora-auth-card) .stCheckbox input:checked + div {background: #932d32 !important; border-color: #932d32 !important;}
+        .stApp:has(#credora-auth-card) .stFormSubmitButton button {
+            min-height: 48px;
+            border-radius: 12px;
+            background: #932d32;
+            border-color: #932d32;
+            font-size: .875rem;
+            font-weight: 500;
+        }
+        .stApp:has(#credora-auth-card) .stFormSubmitButton button:hover {background: #7e252a; border-color: #7e252a;}
+        .auth-secondary .stButton button,
+        .stApp:has(#credora-auth-card) .stButton button {
+            width: 100%;
+            min-height: 48px;
+            margin-top: 4px;
+            border-radius: 12px;
+            background: #fdf6f0;
+            border: 1px solid #f5d5c8;
+            color: #a84347;
+            font-size: .875rem;
+            font-weight: 500;
+        }
+        .stApp:has(#credora-auth-card) .stButton button:hover {background: #faeee5; color: #932d32; border-color: #f3cebe;}
+        .auth-divider {display: flex; align-items: center; gap: 14px; margin: 26px 0; color: #94a3b8; font-size: .72rem; font-weight: 600;}
+        .auth-divider::before, .auth-divider::after {content: ""; flex: 1; height: 1px; background: #e2e8f0;}
+        .secure-access {margin: 0; padding: 0; border: 0; color: #64748b; font-size: .78rem;}
+        .secure-access::before {content: "✓"; display: inline-grid; place-items: center; width: 17px; height: 17px; margin-right: 8px; border: 1px solid #94a3b8; border-radius: 50%; color: #64748b; font-size: .62rem;}
+
         @media (max-width: 1100px) {
             .readiness {grid-template-columns: 1fr;}
             .readiness-checks {border-left: 0; border-top: 1px solid rgba(162,52,56,.18); padding: 18px 0 0; grid-template-columns: 1fr 1fr;}
@@ -344,7 +441,9 @@ def inject_credora_theme() -> None:
         }
         @media (max-width: 820px) {
             .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {display: block;}
-            .login-panel {min-height: 46vh; padding: 44px 28px;}
+            .stApp:has(#credora-login-mode) [data-testid="column"]:first-child,
+            .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {width: 100% !important; flex: 0 0 100% !important;}
+            .login-panel {min-height: 52vw; max-height: 390px; padding: 0; background-size: cover; background-position: left top;}
             .login-brand {margin-bottom: 42px;}
             .login-feature-row {margin-top: 36px; gap: 24px;}
             .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {min-height: 54vh; padding: 36px 20px;}
@@ -361,7 +460,7 @@ def inject_credora_theme() -> None:
             .login-feature-row {justify-content: space-between; gap: 10px;}
             .login-wordmark {font-size: 1.8rem;}
         }
-        </style>
-        """,
+            """,
+        ).replace("__LOGIN_HERO__", f"data:image/png;base64,{hero_data}"),
         unsafe_allow_html=True,
     )
