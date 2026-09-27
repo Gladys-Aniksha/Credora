@@ -12,18 +12,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
+Limiter: Any = None
+RateLimitExceeded: Any = None
+SlowAPIMiddleware: Any = None
+get_remote_address: Any = None
+_rate_limit_exceeded_handler: Any = None
+
 try:
-    from slowapi import Limiter
-    from slowapi.errors import RateLimitExceeded
-    from slowapi.middleware import SlowAPIMiddleware
-    from slowapi.util import get_remote_address
-    from slowapi.extension import _rate_limit_exceeded_handler
+    from slowapi import Limiter as _Limiter
+    from slowapi.errors import RateLimitExceeded as _RateLimitExceeded
+    from slowapi.extension import _rate_limit_exceeded_handler as _slowapi_rate_limit_exceeded_handler
+    from slowapi.middleware import SlowAPIMiddleware as _SlowAPIMiddleware
+    from slowapi.util import get_remote_address as _get_remote_address
 except Exception:  # pragma: no cover - optional until requirements are installed.
-    Limiter = None
-    RateLimitExceeded = None
-    SlowAPIMiddleware = None
-    get_remote_address = None
-    _rate_limit_exceeded_handler = None
+    pass
+else:
+    Limiter = _Limiter
+    RateLimitExceeded = _RateLimitExceeded
+    SlowAPIMiddleware = _SlowAPIMiddleware
+    get_remote_address = _get_remote_address
+    _rate_limit_exceeded_handler = _slowapi_rate_limit_exceeded_handler
 
 from core.auth import (
     can_view_all,
