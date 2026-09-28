@@ -60,9 +60,26 @@ def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> Non
     theme_source = (DASHBOARD_ROOT / "theme.py").read_text(encoding="utf-8")
     auth_source = (DASHBOARD_ROOT / "pages" / "auth.py").read_text(encoding="utf-8")
     hero_path = DASHBOARD_ROOT / "assets" / "login-hero.png"
+    hero_bytes = hero_path.read_bytes()
 
-    assert hero_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert hero_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    assert int.from_bytes(hero_bytes[16:20], "big") == 1672
+    assert int.from_bytes(hero_bytes[20:24], "big") == 941
     assert "login-hero.png" in theme_source
+    assert "material-symbols-rounded.ttf" in theme_source
+    assert all(
+        (DASHBOARD_ROOT / "assets" / "fonts" / font_name).is_file()
+        for font_name in (
+            "inter-300.ttf",
+            "inter-400.ttf",
+            "inter-500.ttf",
+            "inter-600.ttf",
+            "inter-700.ttf",
+            "material-symbols-rounded.ttf",
+        )
+    )
     assert "st.form(\"credora-login\")" in auth_source
     assert "st.form(\"credora-register\")" in auth_source
+    assert 'icon=":material/mail:"' in auth_source
+    assert 'icon=":material/lock:"' in auth_source
     assert "st.tabs" not in auth_source

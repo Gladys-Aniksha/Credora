@@ -7,8 +7,24 @@ import streamlit as st
 
 
 def inject_credora_theme() -> None:
-    hero_path = Path(__file__).resolve().parent / "assets" / "login-hero.png"
-    hero_data = base64.b64encode(hero_path.read_bytes()).decode("ascii")
+    assets_dir = Path(__file__).resolve().parent / "assets"
+
+    def asset_data_uri(path: Path, mime_type: str) -> str:
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:{mime_type};base64,{encoded}"
+
+    asset_uris = {
+        "__LOGIN_HERO__": asset_data_uri(assets_dir / "login-hero.png", "image/png"),
+        "__INTER_300__": asset_data_uri(assets_dir / "fonts" / "inter-300.ttf", "font/ttf"),
+        "__INTER_400__": asset_data_uri(assets_dir / "fonts" / "inter-400.ttf", "font/ttf"),
+        "__INTER_500__": asset_data_uri(assets_dir / "fonts" / "inter-500.ttf", "font/ttf"),
+        "__INTER_600__": asset_data_uri(assets_dir / "fonts" / "inter-600.ttf", "font/ttf"),
+        "__INTER_700__": asset_data_uri(assets_dir / "fonts" / "inter-700.ttf", "font/ttf"),
+        "__MATERIAL_SYMBOLS__": asset_data_uri(
+            assets_dir / "fonts" / "material-symbols-rounded.ttf",
+            "font/ttf",
+        ),
+    }
     css = """
         <style>
         __CREDORA_THEME__
@@ -291,147 +307,230 @@ def inject_credora_theme() -> None:
         .assurance-bars div::after {background: #f3e4dc;}
         .assurance-bars i {background: var(--primary);}
 
+        /* Pixel-matched translation of the supplied landscape login reference. */
+        @font-face {font-family: "Inter"; src: url("__INTER_300__") format("truetype"); font-style: normal; font-weight: 300; font-display: swap;}
+        @font-face {font-family: "Inter"; src: url("__INTER_400__") format("truetype"); font-style: normal; font-weight: 400; font-display: swap;}
+        @font-face {font-family: "Inter"; src: url("__INTER_500__") format("truetype"); font-style: normal; font-weight: 500; font-display: swap;}
+        @font-face {font-family: "Inter"; src: url("__INTER_600__") format("truetype"); font-style: normal; font-weight: 600; font-display: swap;}
+        @font-face {font-family: "Inter"; src: url("__INTER_700__") format("truetype"); font-style: normal; font-weight: 700; font-display: swap;}
+        @font-face {font-family: "Material Symbols Rounded"; src: url("__MATERIAL_SYMBOLS__") format("truetype"); font-style: normal; font-weight: 400; font-display: block;}
+        .stApp:has(#credora-login-mode) {font-family: Inter, Arial, sans-serif;}
+        .stApp:has(#credora-login-mode) *,
+        .stApp:has(#credora-login-mode) *::before,
+        .stApp:has(#credora-login-mode) *::after {box-sizing: border-box;}
+        .stApp:has(#credora-login-mode) [data-testid="stIconMaterial"] {
+            font-family: "Material Symbols Rounded" !important;
+            font-feature-settings: "liga" !important;
+            font-style: normal;
+            font-weight: 400;
+            letter-spacing: normal;
+            text-transform: none;
+            white-space: nowrap;
+        }
+        .stApp:has(#credora-login-mode) {
+            width: 100vw;
+            height: 100vh;
+            min-width: 960px;
+            min-height: 600px;
+            overflow: hidden;
+            background: #faf9f7;
+        }
         .stApp:has(#credora-login-mode) header[data-testid="stHeader"],
         .stApp:has(#credora-login-mode) [data-testid="stSidebar"] {display: none;}
-        .stApp:has(#credora-login-mode) [data-testid="stMainBlockContainer"] {max-width: none; padding: 0; margin: 0;}
-        .stApp:has(#credora-login-mode) [data-testid="stMain"] {min-height: calc(100vh + 3.5rem); margin-top: -3.5rem;}
-        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {gap: 0; align-items: stretch;}
-        .stApp:has(#credora-login-mode) [data-testid="column"] {padding: 0;}
-        #credora-login-mode {display: none;}
-        .login-panel {
-            position: relative;
+        .stApp:has(#credora-login-mode) [data-testid="stMain"] {
+            min-height: calc(100vh + 3.5rem);
+            margin-top: -3.5rem;
             overflow: hidden;
-            min-height: 100vh;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stMainBlockContainer"] {
+            width: 100vw;
+            max-width: none;
+            height: 100vh;
+            padding: 0;
             margin: 0;
-            border: 0;
-            border-radius: 0;
-            padding: clamp(60px, 8vh, 110px) clamp(46px, 7vw, 115px);
-            box-shadow: none;
-            background:
-                radial-gradient(110% 38% at 18% 106%, #92282d 0 38%, transparent 39%),
-                radial-gradient(120% 44% at 86% 101%, rgba(187,94,97,.91) 0 43%, transparent 44%),
-                radial-gradient(112% 38% at 26% 87%, rgba(217,156,151,.76) 0 47%, transparent 48%),
-                radial-gradient(70% 80% at 104% 8%, rgba(217,156,151,.72) 0 48%, transparent 49%),
-                #fff1e7;
-            color: var(--text);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
         }
-        .login-brand {display: flex; align-items: center; gap: 22px; margin-bottom: 74px;}
-        .login-brand .credora-emblem {width: 64px; height: 64px; font-size: 2rem;}
-        .login-wordmark {font-family: Manrope, Inter, sans-serif; font-size: clamp(2rem, 3vw, 3.1rem); letter-spacing: .22em; line-height: 1; color: #151111;}
-        .login-wordmark span {display: block; margin-top: 13px; font-family: Inter, sans-serif; font-size: .72rem; letter-spacing: .42em; color: #403737;}
-        .login-rule {width: 64px; height: 3px; background: #d47c77; margin-bottom: 34px;}
-        .login-panel h1 {font-size: clamp(1.65rem, 2.2vw, 2.4rem); line-height: 1.28; color: #4e4746; max-width: 600px; font-weight: 500; margin: 0;}
-        .login-feature-row {display: flex; gap: clamp(34px, 6vw, 90px); margin-top: 54px;}
-        .login-feature {text-align: center; color: #2d2525; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; line-height: 1.45;}
-        .login-feature-icon {width: 50px; height: 50px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.34); border: 1px solid rgba(162,52,56,.10); color: var(--primary); font-size: 1.15rem;}
-        .login-signature {position: relative; z-index: 1; color: rgba(255,255,255,.88); font-size: .68rem; text-transform: uppercase; letter-spacing: .22em; line-height: 1.7;}
-
-        .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fcfaf8; padding: 5vh 7vw;}
-        .stApp:has(#credora-login-mode) [data-testid="stVerticalBlockBorderWrapper"] {
-            width: min(620px, 100%);
-            border: 1px solid var(--border) !important;
-            border-radius: 8px !important;
-            background: rgba(255,255,255,.82);
-            padding: clamp(24px, 3.2vw, 48px);
-            box-shadow: var(--shadow-strong);
+        #credora-login-mode, #credora-auth-card {display: none;}
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {
+            min-height: 100vh;
+            gap: 0;
+            align-items: stretch;
         }
-        #credora-auth-card {display: none;}
-        .auth-heading h2 {font-size: clamp(2rem, 3vw, 2.8rem); margin: 6px 0 8px; color: #111;}
-        .auth-heading p {font-size: 1rem; color: var(--muted); line-height: 1.55; margin: 0 0 18px;}
-        .stApp:has(#credora-auth-card) [data-baseweb="tab-list"] {gap: 6px; margin-bottom: 18px;}
-        .stApp:has(#credora-auth-card) [data-baseweb="tab"] {height: 40px; border-radius: 7px 7px 0 0; font-weight: 700;}
-        .stApp:has(#credora-auth-card) .stTextInput input {min-height: 50px;}
-        .stApp:has(#credora-auth-card) .stFormSubmitButton button {min-height: 52px; width: 100%; font-size: 1rem;}
-        .secure-access {margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); text-align: center; color: var(--muted); font-size: .78rem;}
-
-        /* Exact translation of the supplied Tailwind login reference. */
-        .stApp:has(#credora-login-mode) {background: #faf9f7;}
-        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {min-height: 100vh;}
-        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+        .stApp:has(#credora-login-mode) [data-testid="stForm"] [data-testid="stHorizontalBlock"] {
+            min-height: auto;
+            align-items: center;
+            gap: .5rem;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="column"] {padding: 0;}
+        .stApp:has(#credora-login-mode) [data-testid="column"]:first-child {
+            width: 56% !important;
+            flex: 0 0 56% !important;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {
             display: flex;
+            width: 44% !important;
+            flex: 0 0 44% !important;
+            min-height: 100vh;
             align-items: center;
             justify-content: center;
             padding: 48px clamp(28px, 4vw, 64px);
-            box-sizing: border-box;
+            background: #faf9f7;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stForm"] [data-testid="column"] {
+            display: block;
+            width: 50% !important;
+            min-height: auto;
+            flex: 1 1 50% !important;
+            padding: 0;
+            background: transparent;
+        }
+        .login-panel {
+            width: 100%;
+            height: 100vh;
+            min-height: 600px;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            background-image: url("__LOGIN_HERO__");
+            background-size: 100vw 100vh;
+            background-position: left top;
+            background-repeat: no-repeat;
         }
         .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] > div:nth-child(2) > div {
             width: 100%;
             max-width: 460px;
             margin: auto;
         }
-        .stApp:has(#credora-login-mode) [data-testid="column"]:first-child {width: 56% !important; flex: 0 0 56% !important;}
-        .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {
-            width: 44% !important;
-            flex: 0 0 44% !important;
-            min-height: 100vh;
-            padding: 48px clamp(28px, 4vw, 64px);
-            background: #faf9f7;
-        }
-        .login-panel {
-            min-height: 100vh;
-            padding: 0;
-            background-image: url("__LOGIN_HERO__");
-            background-size: cover;
-            background-position: left top;
-            background-repeat: no-repeat;
-        }
-        .stApp:has(#credora-login-mode) [data-testid="stVerticalBlockBorderWrapper"] {
+        .stApp:has(#credora-login-mode) [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"]:first-child #credora-auth-card) {
             width: min(460px, 100%) !important;
             max-width: 460px !important;
             flex: 0 0 auto !important;
             margin: auto !important;
+            padding: 40px !important;
+            transform: translateY(20px);
             border: 1px solid rgba(245,245,244,.92) !important;
             border-radius: 24px !important;
-            background: #ffffff;
-            padding: clamp(28px, 3vw, 40px);
+            background: #fff;
             box-shadow: 0 20px 40px -15px rgba(0,0,0,.05), 0 0 1px 1px rgba(0,0,0,.03);
         }
-        .auth-heading {margin-bottom: 24px;}
-        .auth-heading h2 {font-size: clamp(1.9rem, 2.4vw, 2.15rem); line-height: 1.2; color: #0f172a; margin: 0; font-weight: 700;}
-        .auth-heading p {font-size: .91rem; line-height: 1.65; color: #64748b; margin: 10px 0 0;}
-        .stApp:has(#credora-auth-card) [data-testid="stForm"] {border: 0; padding: 0;}
-        .stApp:has(#credora-auth-card) .stTextInput {margin-bottom: 2px;}
+        .auth-heading {margin: 0 0 24px;}
+        .auth-heading h2 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 34px;
+            font-weight: 700;
+            line-height: 1.25;
+            letter-spacing: 0;
+            padding: 0 !important;
+        }
+        .auth-heading p {
+            margin: 10px 0 0;
+            color: #64748b;
+            font-size: 14.5px;
+            font-weight: 400;
+            line-height: 1.65;
+        }
+        .stApp:has(#credora-auth-card) [data-testid="stForm"] {padding: 0; border: 0;}
+        .stApp:has(#credora-auth-card) [data-testid="stForm"] > div {gap: 12px;}
+        .stApp:has(#credora-auth-card) .stTextInput {margin: 0;}
         .stApp:has(#credora-auth-card) .stTextInput label p,
-        .stApp:has(#credora-auth-card) .stCheckbox label p {font-size: .8rem; color: #334155; font-weight: 500;}
+        .stApp:has(#credora-auth-card) .stCheckbox label p {
+            color: #334155;
+            font-size: 13px;
+            font-weight: 500;
+        }
         .stApp:has(#credora-auth-card) .stTextInput input {
             min-height: 44px;
+            padding-top: 10px;
+            padding-bottom: 10px;
             border: 1px solid #e2e8f0 !important;
             border-radius: 8px !important;
             background: #fff !important;
             color: #0f172a;
-            font-size: .875rem;
+            font-size: 14px;
         }
-        .stApp:has(#credora-auth-card) .stTextInput input:focus {border-color: #932d32 !important; box-shadow: 0 0 0 1px #932d32 !important;}
-        .stApp:has(#credora-auth-card) .stCheckbox input:checked + div {background: #932d32 !important; border-color: #932d32 !important;}
-        .stApp:has(#credora-auth-card) .stFormSubmitButton button {
+        .stApp:has(#credora-auth-card) .stTextInput input:focus {
+            border-color: #932d32 !important;
+            box-shadow: 0 0 0 1px #932d32 !important;
+        }
+        .stApp:has(#credora-auth-card) .stCheckbox input:checked + div {
+            border-color: #932d32 !important;
+            background: #932d32 !important;
+        }
+        .stApp:has(#credora-auth-card) .stFormSubmitButton button[kind="primary"] {
+            width: 100%;
             min-height: 48px;
+            border: 1px solid #932d32;
             border-radius: 12px;
             background: #932d32;
-            border-color: #932d32;
-            font-size: .875rem;
+            color: #fff;
+            font-size: 14px;
             font-weight: 500;
         }
-        .stApp:has(#credora-auth-card) .stFormSubmitButton button:hover {background: #7e252a; border-color: #7e252a;}
-        .auth-secondary .stButton button,
+        .stApp:has(#credora-auth-card) .stFormSubmitButton button[kind="primary"]:hover {
+            border-color: #7e252a;
+            background: #7e252a;
+        }
+        .stApp:has(#credora-auth-card) .stFormSubmitButton button[kind="tertiary"] {
+            min-height: auto;
+            padding: 0;
+            justify-content: flex-end;
+            border: 0;
+            background: transparent;
+            color: #932d32;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        .stApp:has(#credora-auth-card) .stFormSubmitButton button[kind="tertiary"]:hover {
+            background: transparent;
+            color: #7e252a;
+        }
         .stApp:has(#credora-auth-card) .stButton button {
             width: 100%;
             min-height: 48px;
-            margin-top: 4px;
+            margin-top: 12px;
+            border: 1px solid #f5d5c8;
             border-radius: 12px;
             background: #fdf6f0;
-            border: 1px solid #f5d5c8;
             color: #a84347;
-            font-size: .875rem;
+            font-size: 14px;
             font-weight: 500;
         }
-        .stApp:has(#credora-auth-card) .stButton button:hover {background: #faeee5; color: #932d32; border-color: #f3cebe;}
-        .auth-divider {display: flex; align-items: center; gap: 14px; margin: 26px 0; color: #94a3b8; font-size: .72rem; font-weight: 600;}
-        .auth-divider::before, .auth-divider::after {content: ""; flex: 1; height: 1px; background: #e2e8f0;}
-        .secure-access {margin: 0; padding: 0; border: 0; color: #64748b; font-size: .78rem;}
-        .secure-access::before {content: "✓"; display: inline-grid; place-items: center; width: 17px; height: 17px; margin-right: 8px; border: 1px solid #94a3b8; border-radius: 50%; color: #64748b; font-size: .62rem;}
+        .stApp:has(#credora-auth-card) .stButton button:hover {
+            border-color: #f3cebe;
+            background: #faeee5;
+            color: #932d32;
+        }
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin: 24px 0;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .auth-divider::before, .auth-divider::after {
+            content: "";
+            height: 1px;
+            flex: 1;
+            background: #e2e8f0;
+        }
+        .secure-access {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            color: #64748b;
+            font-size: 12.5px;
+            font-weight: 400;
+            text-align: center;
+        }
+        .secure-access svg {width: 16px; height: 16px; flex: 0 0 16px; color: #94a3b8;}
 
         @media (max-width: 1100px) {
             .readiness {grid-template-columns: 1fr;}
@@ -440,13 +539,6 @@ def inject_credora_theme() -> None:
             .workspace-search {width: min(330px, 48vw);}
         }
         @media (max-width: 820px) {
-            .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] {display: block;}
-            .stApp:has(#credora-login-mode) [data-testid="column"]:first-child,
-            .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {width: 100% !important; flex: 0 0 100% !important;}
-            .login-panel {min-height: 52vw; max-height: 390px; padding: 0; background-size: cover; background-position: left top;}
-            .login-brand {margin-bottom: 42px;}
-            .login-feature-row {margin-top: 36px; gap: 24px;}
-            .stApp:has(#credora-login-mode) [data-testid="column"]:last-child {min-height: 54vh; padding: 36px 20px;}
             .workspace-bar {justify-content: space-between;}
             .workspace-search {display: none;}
         }
@@ -457,10 +549,15 @@ def inject_credora_theme() -> None:
             .readiness-main {grid-template-columns: 1fr;}
             .approval {text-align: left;}
             .readiness-checks {grid-template-columns: 1fr;}
-            .login-feature-row {justify-content: space-between; gap: 10px;}
-            .login-wordmark {font-size: 1.8rem;}
         }
             """,
-        ).replace("__LOGIN_HERO__", f"data:image/png;base64,{hero_data}"),
+        )
+        .replace("__LOGIN_HERO__", asset_uris["__LOGIN_HERO__"])
+        .replace("__INTER_300__", asset_uris["__INTER_300__"])
+        .replace("__INTER_400__", asset_uris["__INTER_400__"])
+        .replace("__INTER_500__", asset_uris["__INTER_500__"])
+        .replace("__INTER_600__", asset_uris["__INTER_600__"])
+        .replace("__INTER_700__", asset_uris["__INTER_700__"])
+        .replace("__MATERIAL_SYMBOLS__", asset_uris["__MATERIAL_SYMBOLS__"]),
         unsafe_allow_html=True,
     )
