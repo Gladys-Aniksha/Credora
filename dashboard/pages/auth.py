@@ -31,14 +31,12 @@ def require_dashboard_auth() -> dict:
                     username = st.text_input(
                         "Email",
                         placeholder="you@company.com",
-                        icon=":material/mail:",
                         autocomplete="username",
                     )
                     password = st.text_input(
                         "Password",
                         type="password",
                         placeholder="Enter your password",
-                        icon=":material/lock:",
                         autocomplete="current-password",
                     )
                     remember_col, forgot_col = st.columns(2, gap="small", vertical_alignment="center")
@@ -51,10 +49,8 @@ def require_dashboard_auth() -> dict:
                             width="stretch",
                         )
                     submitted = st.form_submit_button(
-                        "Sign In",
+                        "Sign In  →",
                         type="primary",
-                        icon=":material/arrow_forward:",
-                        icon_position="right",
                         width="stretch",
                     )
                 if forgot_password:
@@ -77,24 +73,20 @@ def require_dashboard_auth() -> dict:
                     unsafe_allow_html=True,
                 )
                 with st.form("credora-register"):
-                    new_username = st.text_input("Username", icon=":material/person:", autocomplete="username")
+                    new_username = st.text_input("Username", autocomplete="username")
                     email = st.text_input(
                         "Email address",
                         value="",
-                        icon=":material/mail:",
                         autocomplete="email",
                     )
                     new_password = st.text_input(
                         "Password",
                         type="password",
-                        icon=":material/lock:",
                         autocomplete="new-password",
                     )
                     created = st.form_submit_button(
-                        "Create Account",
+                        "Create Account  →",
                         type="primary",
-                        icon=":material/arrow_forward:",
-                        icon_position="right",
                         width="stretch",
                     )
                 if created:

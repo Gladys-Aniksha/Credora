@@ -66,7 +66,6 @@ def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> Non
     assert int.from_bytes(hero_bytes[16:20], "big") == 1672
     assert int.from_bytes(hero_bytes[20:24], "big") == 941
     assert "login-hero.png" in theme_source
-    assert "material-symbols-rounded.ttf" in theme_source
     assert all(
         (DASHBOARD_ROOT / "assets" / "fonts" / font_name).is_file()
         for font_name in (
@@ -75,11 +74,11 @@ def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> Non
             "inter-500.ttf",
             "inter-600.ttf",
             "inter-700.ttf",
-            "material-symbols-rounded.ttf",
         )
     )
+    assert "data:image/svg+xml" in theme_source
+    assert 'button[aria-label=\"Show password\"]' in theme_source
     assert "st.form(\"credora-login\")" in auth_source
     assert "st.form(\"credora-register\")" in auth_source
-    assert 'icon=":material/mail:"' in auth_source
-    assert 'icon=":material/lock:"' in auth_source
+    assert ":material/" not in auth_source
     assert "st.tabs" not in auth_source

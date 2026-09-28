@@ -20,10 +20,6 @@ def inject_credora_theme() -> None:
         "__INTER_500__": asset_data_uri(assets_dir / "fonts" / "inter-500.ttf", "font/ttf"),
         "__INTER_600__": asset_data_uri(assets_dir / "fonts" / "inter-600.ttf", "font/ttf"),
         "__INTER_700__": asset_data_uri(assets_dir / "fonts" / "inter-700.ttf", "font/ttf"),
-        "__MATERIAL_SYMBOLS__": asset_data_uri(
-            assets_dir / "fonts" / "material-symbols-rounded.ttf",
-            "font/ttf",
-        ),
     }
     css = """
         <style>
@@ -313,20 +309,10 @@ def inject_credora_theme() -> None:
         @font-face {font-family: "Inter"; src: url("__INTER_500__") format("truetype"); font-style: normal; font-weight: 500; font-display: swap;}
         @font-face {font-family: "Inter"; src: url("__INTER_600__") format("truetype"); font-style: normal; font-weight: 600; font-display: swap;}
         @font-face {font-family: "Inter"; src: url("__INTER_700__") format("truetype"); font-style: normal; font-weight: 700; font-display: swap;}
-        @font-face {font-family: "Material Symbols Rounded"; src: url("__MATERIAL_SYMBOLS__") format("truetype"); font-style: normal; font-weight: 400; font-display: block;}
         .stApp:has(#credora-login-mode) {font-family: Inter, Arial, sans-serif;}
         .stApp:has(#credora-login-mode) *,
         .stApp:has(#credora-login-mode) *::before,
         .stApp:has(#credora-login-mode) *::after {box-sizing: border-box;}
-        .stApp:has(#credora-login-mode) [data-testid="stIconMaterial"] {
-            font-family: "Material Symbols Rounded" !important;
-            font-feature-settings: "liga" !important;
-            font-style: normal;
-            font-weight: 400;
-            letter-spacing: normal;
-            text-transform: none;
-            white-space: nowrap;
-        }
         .stApp:has(#credora-login-mode) {
             width: 100vw;
             height: 100vh;
@@ -450,6 +436,39 @@ def inject_credora_theme() -> None:
             color: #0f172a;
             font-size: 14px;
         }
+        .stApp:has(#credora-auth-card) .stTextInput input[aria-label="Email"],
+        .stApp:has(#credora-auth-card) .stTextInput input[aria-label="Email address"] {
+            padding-left: 40px !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='1.75'%3E%3Cpath d='M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+            background-position: 13px center !important;
+            background-repeat: no-repeat !important;
+            background-size: 16px 16px !important;
+        }
+        .stApp:has(#credora-auth-card) .stTextInput input[aria-label="Username"] {
+            padding-left: 40px !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='1.75'%3E%3Cpath d='M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.1a7.5 7.5 0 0 1 15 0A17.9 17.9 0 0 1 12 21.75 17.9 17.9 0 0 1 4.5 20.1Z' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+            background-position: 13px center !important;
+            background-repeat: no-repeat !important;
+            background-size: 16px 16px !important;
+        }
+        .stApp:has(#credora-auth-card) .stTextInput input[aria-label="Password"] {
+            padding-left: 40px !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='1.75'%3E%3Cpath d='M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+            background-position: 13px center !important;
+            background-repeat: no-repeat !important;
+            background-size: 16px 16px !important;
+        }
+        .stApp:has(#credora-auth-card) button[aria-label="Show password"],
+        .stApp:has(#credora-auth-card) button[aria-label="Hide password"] {
+            width: 40px;
+            min-width: 40px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.75'%3E%3Cpath d='M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-size: 16px 16px !important;
+        }
+        .stApp:has(#credora-auth-card) button[aria-label="Show password"] [data-testid="stIconMaterial"],
+        .stApp:has(#credora-auth-card) button[aria-label="Hide password"] [data-testid="stIconMaterial"] {display: none !important;}
         .stApp:has(#credora-auth-card) .stTextInput input:focus {
             border-color: #932d32 !important;
             box-shadow: 0 0 0 1px #932d32 !important;
@@ -557,7 +576,6 @@ def inject_credora_theme() -> None:
         .replace("__INTER_400__", asset_uris["__INTER_400__"])
         .replace("__INTER_500__", asset_uris["__INTER_500__"])
         .replace("__INTER_600__", asset_uris["__INTER_600__"])
-        .replace("__INTER_700__", asset_uris["__INTER_700__"])
-        .replace("__MATERIAL_SYMBOLS__", asset_uris["__MATERIAL_SYMBOLS__"]),
+        .replace("__INTER_700__", asset_uris["__INTER_700__"]),
         unsafe_allow_html=True,
     )
