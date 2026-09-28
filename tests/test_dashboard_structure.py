@@ -78,6 +78,8 @@ def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> Non
     )
     assert "data:image/svg+xml" in theme_source
     assert 'button[aria-label=\"Show password\"]' in theme_source
+    assert '[data-testid=\"stIconMaterial\"]' in theme_source
+    assert '[class*=\"material-symbols\"]' in theme_source
     assert "st.form(\"credora-login\")" in auth_source
     assert "st.form(\"credora-register\")" in auth_source
     assert ":material/" not in auth_source

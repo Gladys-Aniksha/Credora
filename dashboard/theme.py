@@ -467,8 +467,25 @@ def inject_credora_theme() -> None:
             background-repeat: no-repeat !important;
             background-size: 16px 16px !important;
         }
-        .stApp:has(#credora-auth-card) button[aria-label="Show password"] [data-testid="stIconMaterial"],
-        .stApp:has(#credora-auth-card) button[aria-label="Hide password"] [data-testid="stIconMaterial"] {display: none !important;}
+        .stApp:has(#credora-auth-card) [data-testid="stIconMaterial"],
+        .stApp:has(#credora-auth-card) .material-symbols-rounded,
+        .stApp:has(#credora-auth-card) .material-symbols-outlined,
+        .stApp:has(#credora-auth-card) [class*="material-symbols"] {
+            display: none !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+        }
+        .stApp:has(#credora-auth-card) button p {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            margin: 0;
+            white-space: nowrap;
+        }
         .stApp:has(#credora-auth-card) .stTextInput input:focus {
             border-color: #932d32 !important;
             box-shadow: 0 0 0 1px #932d32 !important;
