@@ -6,9 +6,13 @@ import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
+from modules.phase2_deep_trust.m3_robustness_testing.robustness import (
+    test_robustness as run_robustness,
+)
+from modules.phase2_deep_trust.m10_dataset_leakage import leakage as leakage_module
 from modules.phase2_deep_trust.m10_dataset_leakage.leakage import check_dataset_leakage
+from modules.phase2_deep_trust.m11_privacy_risk import privacy as privacy_module
 from modules.phase2_deep_trust.m11_privacy_risk.privacy import assess_privacy_risk
-from modules.phase2_deep_trust.m3_robustness_testing.robustness import test_robustness as run_robustness
 
 
 def _write_model_and_data(tmp_path: Path) -> tuple[Path, Path, Path, dict]:
@@ -33,7 +37,8 @@ def _write_model_and_data(tmp_path: Path) -> tuple[Path, Path, Path, dict]:
     return model_path, train_path, test_path, metadata
 
 
-def test_dataset_leakage_flags_overlapping_holdout_rows(tmp_path) -> None:
+def test_dataset_leakage_flags_overlapping_holdout_rows(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(leakage_module, "DATA_DIR", tmp_path / "data")
     model_path, _train_path, test_path, metadata = _write_model_and_data(tmp_path)
 
     result = check_dataset_leakage(model_path, test_path, metadata)
@@ -44,7 +49,8 @@ def test_dataset_leakage_flags_overlapping_holdout_rows(tmp_path) -> None:
     assert any(finding.title in {"Possible holdout leakage", "Small train/test overlap detected"} for finding in result.findings)
 
 
-def test_privacy_risk_reports_confidence_evidence(tmp_path) -> None:
+def test_privacy_risk_reports_confidence_evidence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(privacy_module, "DATA_DIR", tmp_path / "data")
     model_path, _train_path, test_path, metadata = _write_model_and_data(tmp_path)
 
     result = assess_privacy_risk(model_path, test_path, metadata)

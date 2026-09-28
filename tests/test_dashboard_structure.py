@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_ROOT = PROJECT_ROOT / "dashboard"
 
@@ -19,6 +18,7 @@ def test_dashboard_uses_page_and_component_modules() -> None:
 
     expected_imports = {
         "dashboard.components.common",
+        "dashboard.components.overview",
         "dashboard.components.scan_submission",
         "dashboard.pages.admin",
         "dashboard.pages.auth",
@@ -84,3 +84,25 @@ def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> Non
     assert "st.form(\"credora-register\")" in auth_source
     assert ":material/" not in auth_source
     assert "st.tabs" not in auth_source
+
+
+def test_overview_matches_reference_structure_and_uses_real_navigation() -> None:
+    overview_source = (DASHBOARD_ROOT / "components" / "overview.py").read_text(encoding="utf-8")
+    app_source = (DASHBOARD_ROOT / "app.py").read_text(encoding="utf-8")
+    theme_source = (DASHBOARD_ROOT / "theme.py").read_text(encoding="utf-8")
+
+    for section in (
+        "Model Trust Overview",
+        "Deployment Readiness",
+        "Model Summary",
+        "Recent Assessments",
+        "Alerts",
+    ):
+        assert section in overview_source
+    assert "Trust Drift Over Time" in app_source
+    assert 'args=("Reports",)' in overview_source
+    assert 'args=("Model Registry",)' in overview_source
+    assert 'args=("Alerts",)' in overview_source
+    assert "build_drift_figure(model_scan_rows, trust_score)" in app_source
+    assert "render_metric_cards(trust_score" in app_source
+    assert "#credora-overview-mode" in theme_source

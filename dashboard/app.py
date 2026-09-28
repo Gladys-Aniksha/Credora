@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -26,10 +26,25 @@ from core.db import (
     list_scans,
 )
 from dashboard.components.common import format_time, h, module_label, render_page_head
-from dashboard.components.scan_submission import execute_scan_submission, render_scan_submission
+from dashboard.components.overview import (
+    build_drift_figure,
+    render_metric_cards,
+    render_model_summary,
+    render_overview_header,
+    render_readiness_banner,
+    render_recent_assessments,
+)
+from dashboard.components.overview import render_alerts as render_overview_alerts
+from dashboard.components.scan_submission import (
+    execute_scan_submission,
+    render_scan_submission,
+)
 from dashboard.pages.admin import render_admin_page
 from dashboard.pages.auth import require_dashboard_auth
-from dashboard.pages.production_monitoring import render_flow_ingestion, render_production_drift_windows
+from dashboard.pages.production_monitoring import (
+    render_flow_ingestion,
+    render_production_drift_windows,
+)
 from dashboard.pages.reports import render_reports_page
 from dashboard.theme import inject_credora_theme
 
@@ -605,6 +620,28 @@ def update_setting(setting_key: str, control_key: str) -> None:
 
 current_user = require_dashboard_auth()
 
+
+def sync_dashboard_page() -> None:
+    selected = st.session_state.get("dashboard_page", "Overview")
+    st.session_state["dashboard_query_page"] = selected
+    st.query_params["page"] = selected
+
+
+navigation_options = [
+    "Overview",
+    "Model Registry",
+    "Traffic Classifier",
+    "Trust Score",
+    "Trust Drift",
+    "Reports",
+    "Alerts",
+    "Settings",
+] + (["Admin"] if current_user.get("role") in {"reviewer", "admin"} else [])
+requested_page = st.query_params.get("page")
+if requested_page in navigation_options and st.session_state.get("dashboard_query_page") != requested_page:
+    st.session_state["dashboard_page"] = requested_page
+    st.session_state["dashboard_query_page"] = requested_page
+
 with st.sidebar:
     st.markdown(
         "<div class='brand'><div class='brand-mark'>C</div><div class='brand-title'><strong>CREDORA</strong><span>Model Assurance</span></div></div>",
@@ -614,7 +651,7 @@ with st.sidebar:
         f"<div class='sidebar-user'><strong>{h(current_user['username'])}</strong>{h(current_user['role']).title()} workspace</div>",
         unsafe_allow_html=True,
     )
-    if can_view_all(current_user):
+    if can_view_all(current_user) and st.session_state.get("dashboard_page", requested_page or "Overview") != "Overview":
         st.toggle("Show all users' scans", key="show_all_users", value=bool(st.session_state.get("show_all_users", False)))
     if st.button("Logout", width="stretch"):
         for key in ["auth_user", "access_token", "refresh_token", "report", "progress_events"]:
@@ -622,8 +659,14 @@ with st.sidebar:
         st.rerun()
     page = st.radio(
         "Navigation",
-        (["Overview", "Model Registry", "Traffic Classifier", "Trust Score", "Trust Drift", "Reports", "Alerts", "Settings"] + (["Admin"] if current_user.get("role") in {"reviewer", "admin"} else [])),
+        navigation_options,
         label_visibility="collapsed",
+        key="dashboard_page",
+        on_change=sync_dashboard_page,
+    )
+    st.markdown(
+        '<div class="sidebar-motto">TRUST<br>ENCRYPTED<br>INTELLIGENCE</div>',
+        unsafe_allow_html=True,
     )
 
     scan_submission = render_scan_submission(PROJECT_ROOT)
@@ -636,19 +679,16 @@ with st.sidebar:
 
 
 initials = "".join(part[:1].upper() for part in str(current_user.get("username", "User")).split()[:2]) or "CU"
-st.markdown(
-    f"""
-    <div class="workspace-bar">
-      <div class="workspace-search">Search models, assessments, or reports...</div>
-      <div class="workspace-user"><span class="workspace-avatar">{h(initials)}</span><div><strong>{h(current_user.get('username', 'Credora user'))}</strong>{h(str(current_user.get('role', 'uploader')).title())}</div></div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-if page == "Overview":
-    render_page_head("Model Trust Overview", "Monitor, assess, and ensure the trustworthiness of your AI models.")
+if page != "Overview":
+    st.markdown(
+        f"""
+        <div class="workspace-bar">
+          <div class="workspace-search">Search models, assessments, or reports...</div>
+          <div class="workspace-user"><span class="workspace-avatar">{h(initials)}</span><div><strong>{h(current_user.get('username', 'Credora user'))}</strong>{h(str(current_user.get('role', 'uploader')).title())}</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 execute_scan_submission(scan_submission, current_user, render_page_head)
@@ -706,108 +746,45 @@ dep_level, dep_tone, dep_count = dependency_state(deps)
 
 
 if page == "Overview":
-    st.markdown(
-        f"""
-        <section class="readiness">
-          <div>
-            <div class="eyebrow">Deployment readiness</div>
-            <div class="readiness-main">
-              <div><h2>{h(readiness)}</h2><p>{h(readiness_note)}</p></div>
-              <div class="approval"><span class="approval-badge">{h(approval)}</span><div class="evaluated">Last evaluated:<br>{h(format_time(generated_at))}</div></div>
-            </div>
-          </div>
-          <div class="readiness-checks">
-            <div class="readiness-check"><b>&#10003;</b><span>Security assessment completed</span></div>
-            <div class="readiness-check"><b>&#10003;</b><span>{counts.get('critical', 0)} critical risks detected</span></div>
-            <div class="readiness-check"><b>&#10003;</b><span>Trust score measured against policy</span></div>
-            <div class="readiness-check"><b>&#10003;</b><span>Model integrity evidence captured</span></div>
-          </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-
     integrity_value = safe_score(verification.get("score"))
     dependency_risk = max(0.0, 100.0 - safe_score(deps.get("score")))
-    assurance_tier = "A" if trust_score >= 85 else "B" if trust_score >= 70 else "C" if trust_score >= 50 else "D"
-    score_note = "Excellent" if trust_score >= 90 else "Good" if trust_score >= 75 else "Needs review"
-    st.markdown(
-        f"""
-        <div class="metric-grid">
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon">TS</span>Trust Score</div><div class="metric-value">{trust_score:.1f}<span style="font-size:.82rem;font-weight:500;color:#716867"> / 100</span></div><div class="metric-note good">{h(score_note)} · {h(model_name)}</div></div>
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon good">MI</span>Model Integrity</div><div class="metric-value teal">{integrity_value:.0f}<span style="font-size:.82rem;font-weight:500;color:#716867"> / 100</span></div><div class="metric-note">SHA-256 and signature evidence</div></div>
-          <div class="metric-card"><div class="metric-title"><span class="metric-icon warn">DR</span>Dependency Risk</div><div class="metric-value orange">{dependency_risk:.0f}<span style="font-size:.82rem;font-weight:500;color:#716867"> / 100</span></div><div class="metric-note">{dep_count} actionable finding(s) · {h(dep_level)}</div></div>
-          <div class="metric-card"><div class="metric-title">Model Assurance Tier</div><div class="tier-ring" data-tier="{h(assurance_tier)}"></div><div class="metric-value">Tier {h(assurance_tier)}</div><div class="metric-note">Calibrated from all trust modules</div></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    model_scan_rows = [scan for scan in scan_history if scan.get("model_name") == model_name]
+    model_records = list_models(limit=100, owner_id=owner_id, include_all=include_all)
+    model_record = next((item for item in model_records if item.get("model_name") == model_name), {})
+    score_history = [safe_score(scan.get("trust_score")) for scan in model_scan_rows]
+
+    render_overview_header(current_user, len(action_findings))
+    render_readiness_banner(
+        readiness,
+        readiness_note,
+        str(gate_details.get("decision") or ""),
+        trust_score,
+        counts.get("critical", 0),
+        integrity_value,
     )
+    render_metric_cards(trust_score, integrity_value, dependency_risk, dep_count, score_history)
 
-    telemetry_col, gauge_col = st.columns([1.48, 1.0])
-    with telemetry_col:
-        with st.container(border=True):
-            st.markdown("### Inference Volume & Attack Vector Stream")
-            st.caption("Classified encrypted-flow metadata across the current assessment window.")
-            telemetry = overview_telemetry_frame(classifier_details, adversarial_details)
-            line = px.line(
-                telemetry,
-                x="Time",
-                y="Relative volume",
-                color="Flow class",
-                markers=True,
-                color_discrete_map={"Normal": "#A23438", "Suspicious": "#BB5E61", "Masked / VPN": "#2F7252"},
-            )
-            line.update_traces(line_width=2.7, marker=dict(size=6), hovertemplate="%{fullData.name}<br>%{x}: %{y:.1f}<extra></extra>")
-            normal_area = telemetry[telemetry["Flow class"] == "Normal"]
-            line.add_trace(go.Scatter(
-                x=normal_area["Time"],
-                y=normal_area["Relative volume"],
-                mode="lines",
-                line=dict(width=0),
-                fill="tozeroy",
-                fillcolor="rgba(217,156,151,0.22)",
-                hoverinfo="skip",
-                showlegend=False,
-            ))
-            line.update_layout(
-                yaxis_title="Relative flow volume",
-                xaxis_title=None,
-                legend=dict(orientation="h", y=1.12, x=1, xanchor="right", bgcolor="rgba(0,0,0,0)"),
-                yaxis=dict(showgrid=True, gridcolor="#f0e4de", zeroline=False),
-                xaxis=dict(showgrid=False),
-            )
-            st.plotly_chart(chart_layout(line, 390), width="stretch", config={"displayModeBar": False})
-
-    with gauge_col:
-        with st.container(border=True):
-            st.markdown(assurance_tier_html(trust_score, approval), unsafe_allow_html=True)
-    drift_col, alert_col = st.columns([2.15, .9])
+    drift_col, summary_col = st.columns([1.45, 1.0], gap="small")
     with drift_col:
         with st.container(border=True):
-            st.markdown("### Trust Drift Timeline")
-            scan_rows = [scan for scan in scan_history if scan.get("model_name") == model_name]
-            if scan_rows:
-                history = pd.DataFrame(scan_rows).sort_values("generated_at")
-                history["generated_at"] = pd.to_datetime(history["generated_at"])
-                trend = px.line(history, x="generated_at", y="trust_score", markers=True)
-                trend.add_hline(y=70, line_dash="dash", line_color=ORANGE, annotation_text="Review threshold")
-                trend.update_traces(line_color=TEAL, line_width=3, marker=dict(size=7))
-                trend.update_layout(yaxis_range=[0, 105], xaxis_title=None, yaxis_title="Trust score", showlegend=False)
-                st.plotly_chart(chart_layout(trend, 250), width="stretch", config={"displayModeBar": False})
-            else:
-                st.info("Trust history will appear after the next scan.")
-    with alert_col:
-        with st.container(border=True):
-            st.markdown("### Alerts")
-            top_alert = action_findings[0] if action_findings else None
-            if top_alert:
-                st.markdown(
-                    f"<div class='alert-box'><strong>{len(action_findings)} deployment alert(s)</strong><p>{h(top_alert.get('title'))}<br>{h(top_alert.get('recommendation', 'Review before deployment.'))}</p></div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.success("No deployment-blocking alerts were found.")
-            st.caption("Open Alerts for model-specific evidence and recommended fixes.")
+            st.markdown(
+                '<div id="overview-drift-card"></div><div class="overview-card-head chart-head"><h3>Trust Drift Over Time</h3><span>Last 30 days⌄</span></div>',
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(
+                build_drift_figure(model_scan_rows, trust_score),
+                width="stretch",
+                config={"displayModeBar": False, "responsive": True},
+            )
+            st.markdown('<div class="chart-legend"><span>● Trust Score</span><span>– – Alert Threshold</span></div>', unsafe_allow_html=True)
+    with summary_col:
+        render_model_summary(model_name, model_record, generated_at, str(report_data.get("status") or approval))
+
+    recent_col, alerts_col = st.columns([1.35, 1.0], gap="small")
+    with recent_col:
+        render_recent_assessments(scan_history)
+    with alerts_col:
+        render_overview_alerts(action_findings, generated_at)
 
     progress_events = st.session_state.get("progress_events", [])
     if progress_events:
