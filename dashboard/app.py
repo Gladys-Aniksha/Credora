@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.auth import can_view_all
+from core.threat_model import build_threat_model
 from core.db import (
     acknowledge_runtime_alert,
     change_user_password,
@@ -23,14 +24,15 @@ from core.db import (
     list_integrity_checks,
     list_models,
     list_runtime_alerts,
+    list_scan_reports,
     list_scans,
 )
 from dashboard.components.common import format_time, h, module_label, render_page_head
 from dashboard.components.overview import (
     build_drift_figure,
+    build_metric_histories,
     render_metric_cards,
     render_model_summary,
-    render_overview_header,
     render_readiness_banner,
     render_recent_assessments,
 )
@@ -39,6 +41,7 @@ from dashboard.components.scan_submission import (
     execute_scan_submission,
     render_scan_submission,
 )
+from dashboard.components.topbar import render_dashboard_topbar
 from dashboard.pages.admin import render_admin_page
 from dashboard.pages.auth import require_dashboard_auth
 from dashboard.pages.production_monitoring import (
@@ -46,7 +49,8 @@ from dashboard.pages.production_monitoring import (
     render_production_drift_windows,
 )
 from dashboard.pages.reports import render_reports_page
-from dashboard.theme import inject_credora_theme
+from dashboard.pages.threat_model import render_threat_model_page
+from dashboard.theme import credora_brand_html, inject_credora_theme
 
 
 st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="expanded")
@@ -621,42 +625,45 @@ def update_setting(setting_key: str, control_key: str) -> None:
 current_user = require_dashboard_auth()
 
 
+def navigate_dashboard_page(page_name: str) -> None:
+    st.session_state["dashboard_page"] = page_name
+    st.session_state["dashboard_query_page"] = page_name
+    st.query_params["page"] = page_name
+
+
 def sync_dashboard_page() -> None:
     selected = st.session_state.get("dashboard_page", "Overview")
-    st.session_state["dashboard_query_page"] = selected
-    st.query_params["page"] = selected
+    navigate_dashboard_page(selected)
 
 
 navigation_options = [
     "Overview",
     "Model Registry",
+    "Upload Model",
     "Traffic Classifier",
     "Trust Score",
+    "Threat Model",
     "Trust Drift",
     "Reports",
     "Alerts",
     "Settings",
 ] + (["Admin"] if current_user.get("role") in {"reviewer", "admin"} else [])
 requested_page = st.query_params.get("page")
+requested_model = st.query_params.get("model")
 if requested_page in navigation_options and st.session_state.get("dashboard_query_page") != requested_page:
     st.session_state["dashboard_page"] = requested_page
     st.session_state["dashboard_query_page"] = requested_page
 
+owner_id, include_all = dashboard_owner_scope()
+sidebar_open_alert_count = len(
+    list_runtime_alerts(limit=100, status="open", owner_id=owner_id, include_all=include_all)
+)
+
 with st.sidebar:
     st.markdown(
-        "<div class='brand'><div class='brand-mark'>C</div><div class='brand-title'><strong>CREDORA</strong><span>Model Assurance</span></div></div>",
+        credora_brand_html(),
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f"<div class='sidebar-user'><strong>{h(current_user['username'])}</strong>{h(current_user['role']).title()} workspace</div>",
-        unsafe_allow_html=True,
-    )
-    if can_view_all(current_user) and st.session_state.get("dashboard_page", requested_page or "Overview") != "Overview":
-        st.toggle("Show all users' scans", key="show_all_users", value=bool(st.session_state.get("show_all_users", False)))
-    if st.button("Logout", width="stretch"):
-        for key in ["auth_user", "access_token", "refresh_token", "report", "progress_events"]:
-            st.session_state.pop(key, None)
-        st.rerun()
     page = st.radio(
         "Navigation",
         navigation_options,
@@ -665,45 +672,75 @@ with st.sidebar:
         on_change=sync_dashboard_page,
     )
     st.markdown(
-        '<div class="sidebar-motto">TRUST<br>ENCRYPTED<br>INTELLIGENCE</div>',
-        unsafe_allow_html=True,
-    )
-
-    scan_submission = render_scan_submission(PROJECT_ROOT)
-
-    owner_id, include_all = dashboard_owner_scope()
-    sidebar_scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
-    sidebar_model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in sidebar_scan_history]))
-    selected_model = st.selectbox("Active assessment", sidebar_model_names) if sidebar_model_names else None
-    st.caption("Credora v2.0")
-
-
-initials = "".join(part[:1].upper() for part in str(current_user.get("username", "User")).split()[:2]) or "CU"
-if page != "Overview":
-    st.markdown(
-        f"""
-        <div class="workspace-bar">
-          <div class="workspace-search">Search models, assessments, or reports...</div>
-          <div class="workspace-user"><span class="workspace-avatar">{h(initials)}</span><div><strong>{h(current_user.get('username', 'Credora user'))}</strong>{h(str(current_user.get('role', 'uploader')).title())}</div></div>
+        """
+        <div class="sidebar-wave-container" aria-hidden="true">
+          <svg class="sidebar-waves" viewBox="0 0 255 240" preserveAspectRatio="none">
+            <path class="wave wave-back" d="M0 68 C34 40 68 104 107 91 C151 76 169 27 205 13 C226 5 243 10 255 23 L255 240 L0 240 Z" />
+            <path class="wave wave-mid" d="M0 116 C36 82 75 132 113 132 C151 132 174 81 211 75 C229 72 244 81 255 94 L255 240 L0 240 Z" />
+            <path class="wave wave-front" d="M0 157 C39 119 74 151 108 169 C141 187 166 152 194 130 C217 112 239 120 255 137 L255 240 L0 240 Z" />
+            <path class="wave wave-deep" d="M0 202 C35 174 72 187 105 210 C139 234 166 208 194 185 C219 165 241 174 255 191 L255 240 L0 240 Z" />
+          </svg>
         </div>
+        <div class="sidebar-footer-copy">TRUST<br>ENCRYPTED<br>INTELLIGENCE</div>
         """,
         unsafe_allow_html=True,
     )
-
-
-execute_scan_submission(scan_submission, current_user, render_page_head)
-
+    st.markdown(
+        f"<style>[data-testid='stSidebar'] label[data-testid='stRadioOption']:nth-child(9)::after"
+        f"{{content:'{sidebar_open_alert_count}';}}</style>",
+        unsafe_allow_html=True,
+    )
+    sidebar_scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
+    sidebar_model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in sidebar_scan_history]))
+    if requested_model in sidebar_model_names:
+        st.session_state["active_assessment"] = requested_model
+    elif sidebar_model_names and st.session_state.get("active_assessment") not in sidebar_model_names:
+        st.session_state["active_assessment"] = sidebar_model_names[0]
+    selected_model = (
+        st.selectbox("Active assessment", sidebar_model_names, key="active_assessment")
+        if sidebar_model_names
+        else None
+    )
+    st.caption("Credora v2.0")
 
 owner_id, include_all = dashboard_owner_scope()
 scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
+model_records = list_models(limit=100, owner_id=owner_id, include_all=include_all)
 model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in scan_history]))
 session_model = st.session_state.get("report", {}).get("model_name")
 if session_model and session_model not in model_names:
     model_names.insert(0, session_model)
-if scan_submission.submitted and session_model:
-    selected_model = session_model
-elif selected_model not in model_names:
+if selected_model not in model_names:
     selected_model = model_names[0] if model_names else None
+
+open_alert_count = sidebar_open_alert_count
+render_dashboard_topbar(
+    current_user,
+    model_records,
+    scan_history,
+    open_alert_count,
+    show_overview_heading=page == "Overview",
+    can_view_platform=can_view_all(current_user),
+)
+
+if page == "Upload Model":
+    render_page_head(
+        "Upload & Analyze Model",
+        "Submit a model and its evaluation evidence for the full Credora trust assessment",
+    )
+    scan_submission = render_scan_submission(PROJECT_ROOT, standalone=True)
+    execute_scan_submission(scan_submission, current_user, render_page_head)
+    if scan_submission.submitted:
+        st.button(
+            "Open model overview",
+            type="primary",
+            icon=":material/dashboard:",
+            on_click=navigate_dashboard_page,
+            args=("Overview",),
+            width="stretch",
+        )
+    st.stop()
+
 report_data = resolve_report(selected_model)
 
 if not report_data:
@@ -729,8 +766,12 @@ drift = modules.get("data_drift_detection", {})
 adversarial = modules.get("adversarial_validation", {})
 adversarial_details = adversarial.get("details", {})
 runtime_integrity = modules.get("runtime_integrity", {})
+security_gate = modules.get("security_gate", {})
+security_gate_details = security_gate.get("details", {})
 deployment_gate = modules.get("deployment_gate", {})
 gate_details = deployment_gate.get("details", {})
+trust_result = modules.get("trust_score", {})
+trust_score_issued = trust_result.get("details", {}).get("issued") is not False
 trust_score = safe_score(report_data.get("trust_score"))
 counts = severity_counts(report_data)
 findings = all_findings(report_data)
@@ -739,6 +780,11 @@ analysis_trace = report_data.get("analysis_trace", [])
 remediation_plan = report_data.get("remediation_plan", [])
 generated_at = report_data.get("generated_at", "not generated")
 model_name = report_data.get("model_name", "Unknown model")
+threat_model = report_data.get("threat_model") or build_threat_model(
+    report_data.get("module_results", []),
+    model_name=model_name,
+    report_signed=bool(report_data.get("report_signature")),
+)
 f1_pct = safe_score(classifier_details.get("f1_score")) * 100
 readiness, approval, readiness_note = deployment_state(trust_score, counts, deployment_gate)
 readiness_icon = "&#10003;" if gate_details.get("decision") != "blocked" else "!"
@@ -751,9 +797,22 @@ if page == "Overview":
     model_scan_rows = [scan for scan in scan_history if scan.get("model_name") == model_name]
     model_records = list_models(limit=100, owner_id=owner_id, include_all=include_all)
     model_record = next((item for item in model_records if item.get("model_name") == model_name), {})
-    score_history = [safe_score(scan.get("trust_score")) for scan in model_scan_rows]
+    model_report_history = list_scan_reports(
+        limit=15,
+        owner_id=owner_id,
+        include_all=include_all,
+        model_name=model_name,
+    )
+    metric_histories = build_metric_histories(model_report_history, report_data)
 
-    render_overview_header(current_user, len(action_findings))
+    with st.container(key="overview_upload_action"):
+        st.button(
+            "Upload Model",
+            type="primary",
+            icon=":material/upload_file:",
+            on_click=navigate_dashboard_page,
+            args=("Upload Model",),
+        )
     render_readiness_banner(
         readiness,
         readiness_note,
@@ -761,8 +820,17 @@ if page == "Overview":
         trust_score,
         counts.get("critical", 0),
         integrity_value,
+        security_gate_details.get("decision") == "passed",
+        trust_score_issued,
     )
-    render_metric_cards(trust_score, integrity_value, dependency_risk, dep_count, score_history)
+    render_metric_cards(
+        trust_score,
+        integrity_value,
+        dependency_risk,
+        dep_count,
+        metric_histories,
+        trust_score_issued,
+    )
 
     drift_col, summary_col = st.columns([1.45, 1.0], gap="small")
     with drift_col:
@@ -795,7 +863,7 @@ if page == "Overview":
 
 elif page == "Model Registry":
     render_page_head("Model Registry", "Registered classifier artifacts and assessment history")
-    st.info("To assess another model, open 'Scan new model' in the sidebar and upload its model, test CSV, requirements, and metadata files.")
+    st.info("To assess another model, open Upload Model and submit its model, test CSV, requirements, and metadata files.")
     left, right = st.columns([1.15, .85])
     with left:
         with st.container(border=True):
@@ -812,7 +880,7 @@ elif page == "Model Registry":
             st.markdown("### Active Artifact")
             st.markdown(f"**{h(model_name)}**")
             st.caption(f"Last evaluated {format_time(generated_at)}")
-            st.metric("Trust score", f"{trust_score:.1f}/100")
+            st.metric("Trust score", f"{trust_score:.1f}/100" if trust_score_issued else "Not issued")
     with st.container(border=True):
         st.markdown("### Scan History")
         st.dataframe(pd.DataFrame(scan_history), hide_index=True, width="stretch")
@@ -838,7 +906,7 @@ elif page == "Traffic Classifier":
         st.info("This is a legacy report. Run the model again to generate the persistent deep-analysis trace.")
 
     metric_df = pd.DataFrame([
-        {"Metric": "Accuracy", "Value": safe_score(classifier_details.get("accuracy"))},
+        {"Metric": "Observed evaluation accuracy", "Value": safe_score(classifier_details.get("accuracy"))},
         {"Metric": "Precision", "Value": safe_score(classifier_details.get("precision"))},
         {"Metric": "Recall", "Value": safe_score(classifier_details.get("recall"))},
         {"Metric": "F1 Score", "Value": safe_score(classifier_details.get("f1_score"))},
@@ -847,6 +915,7 @@ elif page == "Traffic Classifier":
     with left:
         with st.container(border=True):
             st.markdown("### Performance")
+            st.caption("Metrics are observations from the uploaded evaluation dataset, not guarantees of production accuracy.")
             bars = px.bar(
                 metric_df,
                 x="Metric",
@@ -979,7 +1048,15 @@ elif page == "Trust Score":
     left, right = st.columns([.8, 1.2])
     with left:
         with st.container(border=True):
-            st.markdown(assurance_tier_html(trust_score, str(report_data.get("status", "not run")).title()), unsafe_allow_html=True)
+            if trust_score_issued:
+                st.markdown(assurance_tier_html(trust_score, str(report_data.get("status", "not run")).title()), unsafe_allow_html=True)
+            else:
+                st.error("Trust Score not issued. The model must pass every mandatory Security Gate check first.")
+                failed_checks = [
+                    check for check in security_gate_details.get("checks", []) if not check.get("passed")
+                ]
+                if failed_checks:
+                    st.dataframe(pd.DataFrame(failed_checks), hide_index=True, width="stretch")
     with right:
         with st.container(border=True):
             st.markdown("### Module Health")
@@ -991,6 +1068,10 @@ elif page == "Trust Score":
                     f"<div class='module-row'><div><div class='module-title'>{h(module_label(result.get('module', '')))}</div><div class='module-summary'>{h(result.get('summary', ''))}</div></div><div><span class='status-pill' style='background:{STATUS_COLORS.get(status, '#64748b')}'>{h(status)}</span><div class='module-score'>{safe_score(result.get('score')):.1f}/100</div></div></div>",
                     unsafe_allow_html=True,
                 )
+
+
+elif page == "Threat Model":
+    render_threat_model_page(threat_model)
 
 
 elif page == "Trust Drift":
@@ -1030,6 +1111,8 @@ elif page == "Reports":
         model_name=model_name,
         generated_at=generated_at,
         trust_score=trust_score,
+        trust_score_issued=trust_score_issued,
+        threat_model=threat_model,
         remediation_plan=remediation_plan,
         analysis_trace=analysis_trace,
     )

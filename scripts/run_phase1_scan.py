@@ -17,6 +17,7 @@ from core.report_schema import Finding, ModuleResult, TrustReport
 from core.report_signing import sign_report_dict
 from core.security import ensure_within_directory, slugify_filename
 from core.storage import save_json
+from core.threat_model import build_threat_model
 from modules.phase1_foundation.m1_model_verification.verifier import verify_model
 from modules.phase1_foundation.m2_dependency_scanner.scanner import scan_dependencies
 from modules.phase1_foundation.m8_etc_classifier.evaluate import evaluate_classifier
@@ -24,6 +25,7 @@ from modules.phase1_foundation.m11_trust_score.aggregator import (
     FINAL_EXPECTED_MODULES,
     PRE_DEPLOYMENT_EXPECTED_MODULES,
     calculate_trust_score,
+    trust_score_not_issued,
 )
 from modules.phase2_deep_trust.m3_robustness_testing.robustness import test_robustness
 from modules.phase2_deep_trust.m4_data_drift.drift import detect_data_drift
@@ -36,6 +38,7 @@ from modules.phase2_deep_trust.m8_behavior_analysis.behavior import analyze_beha
 from modules.phase2_deep_trust.m9_docx_report.docx_report import create_docx_report
 from modules.phase3_operations.m4_adversarial_validation.adversarial import run_adversarial_validation
 from modules.phase3_operations.m5_secure_deployment.gatekeeper import evaluate_deployment_gate
+from modules.phase3_operations.m5_secure_deployment.security_gate import evaluate_security_gate
 from modules.phase3_operations.m6_runtime_integrity.watcher import check_runtime_integrity
 
 
@@ -158,30 +161,66 @@ def run_phase1_scan(
     results.append(run_step("Level 11 - Adversarial Validation", "testing timing jitter, sensitive-flow evasion, and sensor feature dropout.", lambda: run_adversarial_validation(model_path, dataset_path, metadata)))
     results.append(run_step("Level 12 - Runtime Integrity", "comparing the active artifact with its approved hash and signature baseline.", lambda: check_runtime_integrity(model_path, metadata)))
 
-    progress("Level 13 - Trust Scoring", "Starting: combining module evidence using the published weighting policy.")
-    preliminary_trust = calculate_trust_score(results, PRE_DEPLOYMENT_EXPECTED_MODULES)
-    preliminary_trust = _apply_raw_model_cap(preliminary_trust, metadata)
-    progress("Level 13 - Trust Scoring", f"Completed: preliminary trust score is {preliminary_trust.score:.1f}/100.")
-    results.append(run_step("Level 14 - Deployment Gate", "applying mandatory score, integrity, adversarial, and security-sensitive recall controls.", lambda: evaluate_deployment_gate(results, preliminary_trust.score, metadata, preliminary_trust)))
+    security_gate = run_step(
+        "Level 13 - Security Gate",
+        "evaluating mandatory signature, hash, artifact, dependency, adversarial, recall, and runtime-integrity controls.",
+        lambda: evaluate_security_gate(results),
+    )
+    results.append(security_gate)
     model_name = metadata.get("model_name") or Path(model_path).stem
-    results.append(run_step("Level 15 - Trust Drift", "comparing this score with prior assessments of the same model identity.", lambda: analyze_trust_drift(preliminary_trust.score, model_name, owner_id=owner_id)))
-    progress("Level 16 - Final Report", "Starting: interpreting evidence and generating model-specific corrective actions and retest conditions.")
-    trust_result = calculate_trust_score(results, FINAL_EXPECTED_MODULES)
-    trust_result = _apply_raw_model_cap(trust_result, metadata)
+
+    if security_gate.details.get("trust_score_eligible") is True:
+        progress("Level 14 - Trust Scoring", "Starting: combining non-gate assurance evidence using the published weighting policy.")
+        preliminary_trust = calculate_trust_score(results, PRE_DEPLOYMENT_EXPECTED_MODULES)
+        results.append(
+            run_step(
+                "Level 15 - Trust Drift",
+                "comparing this score with prior assessments of the same model identity.",
+                lambda: analyze_trust_drift(preliminary_trust.score, model_name, owner_id=owner_id),
+            )
+        )
+        trust_result = calculate_trust_score(results, FINAL_EXPECTED_MODULES)
+        trust_result = _apply_raw_model_cap(trust_result, metadata)
+        progress("Level 14 - Trust Scoring", f"Completed: Trust Score issued at {trust_result.score:.1f}/100.")
+    else:
+        results.append(ModuleResult(
+            module="trust_drift_timeline",
+            status="not_run",
+            score=0.0,
+            summary="Trust drift was not evaluated because the Security Gate blocked Trust Score issuance.",
+            details={"blocked_by": "security_gate"},
+        ))
+        trust_result = trust_score_not_issued(security_gate)
+        progress("Level 14 - Trust Scoring", "Blocked: no Trust Score was issued because the Security Gate failed.")
+
     results.append(trust_result)
+    deployment_gate = run_step(
+        "Level 16 - Deployment Gate",
+        "confirming Security Gate approval and applying the configured assurance thresholds.",
+        lambda: evaluate_deployment_gate(results, trust_result.score, metadata, trust_result),
+    )
+    results.append(deployment_gate)
+
+    progress("Level 17 - Final Report", "Starting: interpreting evidence and generating model-specific corrective actions and retest conditions.")
 
     analysis_trace = build_analysis_trace(results)
     remediation_plan = build_remediation_plan(results, model_name, metadata)
     recommendations = [item["fix"] for item in remediation_plan]
+    threat_model = build_threat_model(
+        results,
+        model_name=model_name,
+        report_signed=bool(report_signing_private_key_path),
+    )
 
     report = TrustReport.create(
         model_name,
         trust_result.score,
-        trust_result.status,
+        deployment_gate.status,
         results,
         recommendations,
         analysis_trace=analysis_trace,
         remediation_plan=remediation_plan,
+        threat_model=threat_model,
     )
     output_path = _safe_report_path(model_name, "phase3_trust_report.json", owner_id=owner_id)
 
@@ -198,23 +237,18 @@ def run_phase1_scan(
                 findings=[],
                 details={"error": str(exc)},
             ))
-            trust_result = calculate_trust_score(
-                [result for result in results if result.module != "trust_score"],
-                FINAL_EXPECTED_MODULES,
-            )
-            trust_result = _apply_raw_model_cap(trust_result, metadata)
-            results = [result for result in results if result.module != "trust_score"] + [trust_result]
             analysis_trace = build_analysis_trace(results)
             remediation_plan = build_remediation_plan(results, model_name, metadata)
             recommendations = [item["fix"] for item in remediation_plan]
             report = TrustReport.create(
                 model_name,
                 trust_result.score,
-                trust_result.status,
+                deployment_gate.status,
                 results,
                 recommendations,
                 analysis_trace=analysis_trace,
                 remediation_plan=remediation_plan,
+                threat_model=threat_model,
             )
 
     if docx_path:
@@ -239,7 +273,7 @@ def run_phase1_scan(
     )
     save_scan(report_dict, output_path, owner_id=owner_id)
     progress(
-        "Level 14 - Final Report",
+        "Level 17 - Final Report",
         f"Completed: saved deep evidence with {len(analysis_trace)} analysis record(s) and {len(remediation_plan)} model-specific fix(es).",
     )
     return report

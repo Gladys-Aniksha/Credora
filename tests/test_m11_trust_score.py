@@ -55,7 +55,7 @@ def test_complete_pre_deployment_stage_is_not_penalized() -> None:
     assert trust.details["missing_modules"] == []
 
 
-def test_preliminary_missing_module_finding_propagates_to_deployment_gate() -> None:
+def test_missing_module_finding_propagates_to_deployment_gate() -> None:
     results = [_result(module) for module in PRE_DEPLOYMENT_EXPECTED_MODULES if module != "explainability"]
     results = [
         _result("adversarial_validation", details={"worst_sensitive_recall": 1.0, "sensitive_labels": []})
@@ -65,11 +65,11 @@ def test_preliminary_missing_module_finding_propagates_to_deployment_gate() -> N
     ]
     preliminary = calculate_trust_score(results, PRE_DEPLOYMENT_EXPECTED_MODULES)
 
-    gate = gatekeeper.evaluate_deployment_gate(
-        results,
-        preliminary.score,
-        preliminary_trust=preliminary,
-    )
+    results.extend([
+        _result("security_gate", details={"decision": "passed", "trust_score_eligible": True}),
+        preliminary,
+    ])
+    gate = gatekeeper.evaluate_deployment_gate(results, preliminary.score, trust_result=preliminary)
 
     assert preliminary.score >= 85
     assert any(finding.title == "Missing explainability" for finding in preliminary.findings)

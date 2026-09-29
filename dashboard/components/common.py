@@ -24,6 +24,7 @@ def module_label(module: str) -> str:
         "model_risk_analyzer": "Model Risk",
         "adversarial_validation": "Adversarial Validation",
         "runtime_integrity": "Runtime Integrity",
+        "security_gate": "Security Gate",
         "deployment_gate": "Production Deployment Gate",
         "trust_drift_timeline": "Trust Drift",
         "trust_score": "Trust Score Engine",

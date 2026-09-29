@@ -416,6 +416,37 @@ def list_scans(limit: int = 25, owner_id: int | None = None, include_all: bool =
     return [dict(row) for row in rows]
 
 
+def list_scan_reports(
+    limit: int = 25,
+    owner_id: int | None = None,
+    include_all: bool = False,
+    model_name: str | None = None,
+) -> list[dict[str, Any]]:
+    init_db()
+    filters: list[str] = []
+    params: list[Any] = []
+    if not include_all and owner_id is not None:
+        filters.append("owner_id = ?")
+        params.append(int(owner_id))
+    if model_name:
+        filters.append("model_name = ?")
+        params.append(model_name)
+    where = f" WHERE {' AND '.join(filters)}" if filters else ""
+    with connect() as conn:
+        rows = conn.execute(
+            f"SELECT report_json FROM scan_history{where} ORDER BY id DESC LIMIT ?",
+            (*params, limit),
+        ).fetchall()
+
+    reports: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            reports.append(json.loads(row["report_json"]))
+        except (TypeError, json.JSONDecodeError):
+            continue
+    return reports
+
+
 def latest_scan(owner_id: int | None = None, include_all: bool = False) -> dict[str, Any] | None:
     init_db()
     clause, params = _owner_clause(owner_id, include_all)
@@ -630,7 +661,6 @@ DEFAULT_TRUST_WEIGHTS = {
     "model_risk_analyzer": 0.05,
     "adversarial_validation": 0.09,
     "runtime_integrity": 0.06,
-    "deployment_gate": 0.05,
     "trust_drift_timeline": 0.02,
 }
 DEFAULT_SENSITIVE_LABELS = ["attack", "malware", "suspicious", "threat", "botnet", "ddos", "intrusion"]
@@ -770,7 +800,8 @@ def set_deployment_policy(policy: dict[str, Any], actor_id: int | None = None) -
 
 def get_trust_weights() -> dict[str, float]:
     weights = dict(DEFAULT_TRUST_WEIGHTS)
-    weights.update(get_platform_setting("trust_weights", {}) or {})
+    configured = get_platform_setting("trust_weights", {}) or {}
+    weights.update({key: value for key, value in configured.items() if key in weights})
     total = sum(float(value) for value in weights.values())
     if total > 0:
         weights = {key: float(value) / total for key, value in weights.items()}

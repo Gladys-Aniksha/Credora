@@ -18,7 +18,8 @@ MODULE_METHODS = {
     "model_risk_analyzer": "Reviewed artifact serialization, size, metadata completeness, expected features, and signing evidence.",
     "adversarial_validation": "Re-ran inference under timing jitter, security-sensitive evasion, and sensor feature-dropout scenarios.",
     "runtime_integrity": "Recalculated the model hash and compared it with the approved runtime identity baseline.",
-    "deployment_gate": "Applied mandatory trust, classifier, adversarial, integrity, and security-sensitive recall thresholds.",
+    "security_gate": "Applied non-negotiable signature, hash, artifact, dependency, model-risk, adversarial, security-sensitive recall, and runtime-integrity checks.",
+    "deployment_gate": "Applied release policy after confirming that the Security Gate passed and a Trust Score was issued.",
     "trust_drift_timeline": "Compared the current trust result with earlier assessments for the same model identity.",
     "trust_score": "Combined module scores using the published Credora weighting policy.",
 }
@@ -52,7 +53,7 @@ def _module_evidence(result: ModuleResult) -> str:
     if module == "classifier_evaluation":
         weak = details.get("weak_classes", [])
         confusions = details.get("confusion_pairs", [])
-        evidence = f"Accuracy {_number(details.get('accuracy'))}, weighted F1 {_number(details.get('f1_score'))}, recall {_number(details.get('recall'))}."
+        evidence = f"Observed evaluation accuracy {_number(details.get('accuracy'))}, weighted F1 {_number(details.get('f1_score'))}, recall {_number(details.get('recall'))}."
         if weak:
             item = min(weak, key=lambda row: float(row.get("f1", 0)))
             evidence += f" Weakest class: {item.get('class')} (F1 {_number(item.get('f1'))}, recall {_number(item.get('recall'))})."
@@ -96,12 +97,17 @@ def _module_evidence(result: ModuleResult) -> str:
         return f"Worst scenario {details.get('worst_case_scenario', 'not available')}; worst F1 {_number(details.get('worst_case_f1'))}; maximum F1 drop {_number(details.get('max_f1_drop'))}; minimum stability {_number(details.get('minimum_prediction_stability'))}; security-sensitive recall {_number(details.get('worst_sensitive_recall'))}."
     if module == "runtime_integrity":
         return f"Integrity state {details.get('integrity_state', 'unknown')}; expected SHA-256 {details.get('expected_sha256', 'not available')}; observed SHA-256 {details.get('actual_sha256', 'not available')}."
+    if module == "security_gate":
+        failed = details.get("failed_checks", [])
+        return f"Decision {details.get('decision', 'not run')}; failed mandatory checks: {', '.join(failed) or 'none'}; Trust Score eligible: {bool(details.get('trust_score_eligible'))}."
     if module == "deployment_gate":
         failed = details.get("failed_checks", [])
         return f"Decision {details.get('decision', 'not run')}; failed mandatory checks: {', '.join(failed) or 'none'}; high-risk findings {details.get('high_risk_finding_count', 0)}; medium-risk findings {details.get('medium_risk_finding_count', 0)}."
     if module == "trust_drift_timeline":
         return f"Previous scans {details.get('previous_scan_count', 0)}; change from latest {_number(details.get('drop_from_latest'))}; distance from historical best {_number(details.get('drop_from_best'))}."
     if module == "trust_score":
+        if details.get("issued") is False:
+            return "Trust Score not issued because the Security Gate did not pass."
         return f"Final weighted score {_number(result.score, 2)}/100; deployment decision {details.get('deployment_decision', 'not available')}."
     return result.summary
 

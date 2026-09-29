@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+PROTECTED_ASSETS = [
+    {"name": "ML model artifact", "description": "Serialized classifier or ONNX graph assessed by Credora.", "importance": "Critical", "impact": "Tampering can change predictions or execute unsafe behavior."},
+    {"name": "Model metadata", "description": "Declared identity, version, features, labels, and training context.", "importance": "High", "impact": "Manipulation can invalidate checks and misrepresent model behavior."},
+    {"name": "Evaluation dataset", "description": "Labeled evidence used for classifier and safety measurements.", "importance": "Critical", "impact": "Poisoning or leakage can produce misleading evaluation results."},
+    {"name": "Dependency files", "description": "Declared Python packages and versions used by the model.", "importance": "High", "impact": "Compromise can introduce vulnerable or malicious code."},
+    {"name": "Model signatures", "description": "Cryptographic evidence binding a package to its signer.", "importance": "Critical", "impact": "Forgery can make an untrusted artifact appear approved."},
+    {"name": "Signing keys", "description": "Private and trusted public keys used for model and report signatures.", "importance": "Critical", "impact": "Key compromise defeats provenance guarantees."},
+    {"name": "Credora trust reports", "description": "Persisted assessment evidence and recommendations.", "importance": "High", "impact": "Tampering can alter the recorded security decision."},
+    {"name": "Trust Score", "description": "Weighted assurance score issued only after the Security Gate passes.", "importance": "High", "impact": "Manipulation can misstate the model's overall assurance."},
+    {"name": "Deployment decision", "description": "Security and policy decision controlling production release.", "importance": "Critical", "impact": "Unauthorized approval can release an unsafe model."},
+    {"name": "Runtime integrity information", "description": "Approved hashes and later runtime verification observations.", "importance": "Critical", "impact": "Loss of integrity evidence can hide model replacement."},
+    {"name": "Drift monitoring information", "description": "Distribution and production-window observations.", "importance": "High", "impact": "Manipulation can conceal degraded or shifted behavior."},
+    {"name": "User and account information", "description": "Credentials, roles, sessions, and ownership boundaries.", "importance": "Critical", "impact": "Compromise can expose reports or authorize malicious uploads."},
+]
+
+THREAT_ACTORS = [
+    {"name": "Malicious Model Provider", "capabilities": "Can prepare model, metadata, dependencies, and evaluation evidence.", "objectives": "Introduce backdoors, hide weak behavior, or obtain deployment approval."},
+    {"name": "Supply-Chain Attacker", "capabilities": "Can modify artifacts, packages, dependencies, or distribution paths.", "objectives": "Inject malicious code or substitute a trusted model."},
+    {"name": "External Attacker", "capabilities": "Can probe exposed authentication, upload, API, and monitoring interfaces.", "objectives": "Gain unauthorized access, alter evidence, or submit malicious inputs."},
+    {"name": "Compromised User Account", "capabilities": "Inherits the permissions and data access of a legitimate account.", "objectives": "Upload unsafe artifacts, steal reports, or misuse authorized workflows."},
+    {"name": "Malicious Insider", "capabilities": "May have legitimate access to models, datasets, policies, or administrative actions.", "objectives": "Manipulate evidence, approve unsafe models, or conceal security findings."},
+]
+
+ATTACK_SURFACES = [
+    "Model upload", "Dataset upload", "Dependency upload", "Metadata upload", "REST API",
+    "Authentication and login", "Dashboard", "Model deserialization", "Pickle/joblib loading",
+    "ONNX processing", "Database", "Signed model packages", "Trust reports",
+    "Production flow ingestion", "Runtime monitoring interfaces",
+]
+
+TRUST_BOUNDARIES = [
+    {"source": "Untrusted user artifact", "control": "Upload validation", "destination": "Credora assessment environment"},
+    {"source": "Model provider", "control": "Signed package and signature verification", "destination": "Verified model"},
+    {"source": "Production traffic", "control": "Flow metadata extraction", "destination": "Credora monitoring"},
+    {"source": "User", "control": "Authentication and role authorization", "destination": "Authorized Credora resources"},
+]
+
+SECURITY_ASSUMPTIONS = [
+    "The host operating system is trusted.",
+    "The Credora backend has not already been compromised.",
+    "Signing private keys are securely protected.",
+    "Trusted public keys are distributed securely.",
+    "Ground-truth evaluation labels are reasonably accurate.",
+    "Production metadata supplied to Credora has not already been maliciously altered.",
+    "Authorized administrators are trusted unless explicitly modeled otherwise.",
+]
+
+OUT_OF_SCOPE_THREATS = [
+    "Fully compromised host operating system",
+    "Kernel or rootkit attacks",
+    "Physical theft of infrastructure",
+    "Compromised signing private key",
+    "Cryptographic break of Ed25519 or SHA-256",
+    "Attacks against underlying network hardware",
+    "Full compromise of external traffic-capture tools",
+    "Malicious privileged system administrator",
+]
+
+THREAT_DEFINITIONS = [
+    {"id": "TM-001", "name": "Model Artifact Tampering", "description": "A model is changed after approval or while in transit.", "actor": "Supply-Chain Attacker", "asset": "ML model artifact", "surface": "Model upload", "likelihood": 3, "impact": 4, "modules": ["model_verification", "runtime_integrity", "security_gate"], "controls": ["SHA-256 baseline verification", "Package signature verification", "Runtime integrity monitoring"], "keywords": ["hash", "signature", "artifact", "tamper"], "action": "Reject the artifact and restore a package verified against a trusted signer.", "residual": "A compromised signing key or trusted host remains outside artifact verification."},
+    {"id": "TM-002", "name": "Malicious Pickle/Joblib Deserialization", "description": "A serialized Python model attempts unsafe object construction or code execution.", "actor": "Malicious Model Provider", "asset": "ML model artifact", "surface": "Pickle/joblib loading", "likelihood": 3, "impact": 4, "modules": ["model_verification", "model_risk_analyzer"], "controls": ["Restricted model loading", "Pickle allow-list inspection", "Artifact format validation"], "keywords": ["pickle", "serialization", "deserialization", "allow-list", "unsafe"], "action": "Use ONNX or a signed package and reject unsupported pickle globals.", "residual": "A newly discovered unsafe serialization primitive may require an allow-list update."},
+    {"id": "TM-003", "name": "Vulnerable or Malicious Dependency", "description": "A declared dependency contains a known vulnerability or malicious package.", "actor": "Supply-Chain Attacker", "asset": "Dependency files", "surface": "Dependency upload", "likelihood": 3, "impact": 3, "modules": ["dependency_scanner"], "controls": ["Dependency vulnerability scanning", "Pinned dependency review"], "keywords": ["dependency", "vulnerability", "cve", "package"], "action": "Upgrade or remove the affected dependency and rerun the scan.", "residual": "Unknown vulnerabilities and compromised upstream releases can remain undetected."},
+    {"id": "TM-004", "name": "Evaluation Dataset Manipulation", "description": "Evaluation evidence is poisoned, leaked, or selected to inflate performance.", "actor": "Malicious Model Provider", "asset": "Evaluation dataset", "surface": "Dataset upload", "likelihood": 3, "impact": 4, "modules": ["dataset_leakage", "data_drift_detection"], "controls": ["Holdout overlap analysis", "Generalization checks", "Distribution comparison"], "keywords": ["leakage", "overlap", "dataset", "drift"], "action": "Repeat evaluation with an independently sourced, untouched holdout dataset.", "residual": "Credora cannot prove that externally supplied labels are truthful."},
+    {"id": "TM-005", "name": "Model Evasion or Adversarial Input", "description": "Perturbed traffic features cause security-sensitive predictions to fail.", "actor": "External Attacker", "asset": "Deployment decision", "surface": "Production flow ingestion", "likelihood": 4, "impact": 4, "modules": ["adversarial_validation", "robustness_testing", "security_gate"], "controls": ["Adversarial validation", "Perturbation testing", "Sensitive-class recall gate"], "keywords": ["adversarial", "evasion", "recall", "stability", "perturb"], "action": "Retrain with representative evasive traffic and satisfy the Security Gate thresholds.", "residual": "Unmodeled attacks can differ from the evaluated perturbation scenarios."},
+    {"id": "TM-006", "name": "Weak or Unreliable Classifier", "description": "The classifier has poor generalization, weak classes, or unstable predictions.", "actor": "Malicious Model Provider", "asset": "Deployment decision", "surface": "Dataset upload", "likelihood": 3, "impact": 3, "modules": ["classifier_evaluation", "behavior_analysis", "robustness_testing"], "controls": ["Precision/recall/F1 evaluation", "Confusion analysis", "Robustness testing"], "keywords": ["weak", "recall", "precision", "f1", "accuracy", "confidence"], "action": "Improve weak classes and repeat evaluation on independent evidence.", "residual": "Observed evaluation performance does not guarantee future production performance."},
+    {"id": "TM-007", "name": "Model Backdoor or Suspicious Behaviour", "description": "A model contains behavior that activates only for hidden or rare patterns.", "actor": "Malicious Model Provider", "asset": "ML model artifact", "surface": "Model upload", "likelihood": 2, "impact": 4, "modules": ["behavior_analysis", "model_risk_analyzer", "explainability"], "controls": ["Behavior analysis", "Model-risk indicators", "Feature influence analysis"], "keywords": ["behavior", "backdoor", "suspicious", "feature", "confidence"], "action": "Investigate suspicious feature reliance and test trigger-oriented datasets.", "residual": "A targeted backdoor may remain dormant outside the evaluated inputs."},
+    {"id": "TM-008", "name": "Runtime Model Replacement", "description": "The deployed artifact is replaced after assessment.", "actor": "Malicious Insider", "asset": "Runtime integrity information", "surface": "Runtime monitoring interfaces", "likelihood": 3, "impact": 4, "modules": ["runtime_integrity", "security_gate"], "controls": ["Runtime SHA-256 verification", "Approved signature baseline", "Integrity alerts"], "keywords": ["runtime", "hash", "changed", "baseline", "signature"], "action": "Stop serving the model, restore the approved artifact, and investigate the change.", "residual": "Monitoring cannot be trusted after full host compromise."},
+    {"id": "TM-009", "name": "Production Data Drift", "description": "Production traffic diverges from the assessed data distribution.", "actor": "External Attacker", "asset": "Drift monitoring information", "surface": "Production flow ingestion", "likelihood": 4, "impact": 3, "modules": ["data_drift_detection", "trust_drift_timeline"], "controls": ["PSI drift detection", "Trust drift history", "Production alerts"], "keywords": ["drift", "distribution", "regression"], "action": "Investigate shifted features and reassess or retrain the model.", "residual": "Drift may emerge between monitoring windows or outside captured metadata."},
+    {"id": "TM-010", "name": "Trust Report Tampering", "description": "Stored or exported assessment evidence is altered after generation.", "actor": "Malicious Insider", "asset": "Credora trust reports", "surface": "Trust reports", "likelihood": 2, "impact": 4, "modules": ["report_signature"], "controls": ["Ed25519 report signing", "Trusted signer verification"], "keywords": ["signature", "report", "tamper"], "action": "Sign the report and verify it against an active trusted signer before release.", "residual": "A stolen signing key can produce apparently valid altered reports."},
+    {"id": "TM-011", "name": "Unauthorized Model Access", "description": "A user reads or modifies a model assessment outside their authorization.", "actor": "External Attacker", "asset": "User and account information", "surface": "REST API", "likelihood": 3, "impact": 4, "modules": ["auth_rbac"], "controls": ["Authentication", "Role-based authorization", "Owner-scoped records"], "keywords": ["authorization", "access", "owner"], "action": "Review account roles, revoke sessions, and inspect audit events.", "residual": "Valid credentials can still be abused by a compromised account."},
+    {"id": "TM-012", "name": "Metadata Manipulation", "description": "Uploaded metadata misstates identity, features, labels, or policy information.", "actor": "Malicious Model Provider", "asset": "Model metadata", "surface": "Metadata upload", "likelihood": 3, "impact": 3, "modules": ["model_verification", "model_risk_analyzer"], "controls": ["Metadata validation", "Server-side policy enforcement", "Signed package manifest"], "keywords": ["metadata", "feature", "version", "policy", "manifest"], "action": "Use signed metadata and correct all missing or inconsistent fields.", "residual": "Semantically false but structurally valid metadata may require independent review."},
+    {"id": "TM-013", "name": "Invalid or Forged Model Signature", "description": "An artifact carries no valid signature or claims an untrusted signer.", "actor": "Supply-Chain Attacker", "asset": "Model signatures", "surface": "Signed model packages", "likelihood": 3, "impact": 4, "modules": ["model_verification", "security_gate"], "controls": ["Package signature verification", "Trusted public-key validation", "Fail-closed Security Gate"], "keywords": ["signature", "signer", "package"], "action": "Reject the package and verify it against a trusted public key.", "residual": "The check cannot detect a compromised trusted private key."},
+    {"id": "TM-014", "name": "Compromised User Account", "description": "A legitimate account is used by an unauthorized party.", "actor": "Compromised User Account", "asset": "User and account information", "surface": "Authentication and login", "likelihood": 3, "impact": 4, "modules": [], "controls": ["Password hashing", "Session revocation", "Role-based access", "Audit logs"], "keywords": ["account", "session", "login"], "action": "Reset credentials, revoke sessions, and review audit activity.", "residual": "Credora does not currently establish that a valid login belongs to the expected person.", "not_assessed": True},
+    {"id": "TM-015", "name": "Supply-Chain Model Modification", "description": "A model or its dependencies are modified in the delivery chain.", "actor": "Supply-Chain Attacker", "asset": "ML model artifact", "surface": "Signed model packages", "likelihood": 3, "impact": 4, "modules": ["model_verification", "dependency_scanner", "runtime_integrity", "security_gate"], "controls": ["Signed package verification", "Dependency scanning", "Runtime hash monitoring"], "keywords": ["hash", "signature", "dependency", "package", "runtime"], "action": "Rebuild from a trusted source and verify the complete signed package.", "residual": "Compromise before signing remains possible if the build environment is untrusted."},
+]

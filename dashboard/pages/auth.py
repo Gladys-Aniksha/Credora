@@ -12,7 +12,7 @@ def require_dashboard_auth() -> dict:
         return st.session_state["auth_user"]
 
     st.markdown('<div id="credora-login-mode"></div>', unsafe_allow_html=True)
-    left, right = st.columns([56, 44], gap=None, vertical_alignment="center")
+    left, right = st.columns([50, 50], gap=None, vertical_alignment="center")
     with left:
         st.markdown(
             '<div class="login-panel" role="img" aria-label="Credora Model Assurance"></div>',

@@ -38,6 +38,7 @@ class TrustReport:
     docx_report_path: str | None = None
     analysis_trace: list[dict[str, Any]] = field(default_factory=list)
     remediation_plan: list[dict[str, Any]] = field(default_factory=list)
+    threat_model: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(
@@ -49,6 +50,7 @@ class TrustReport:
         recommendations: list[str],
         analysis_trace: list[dict[str, Any]] | None = None,
         remediation_plan: list[dict[str, Any]] | None = None,
+        threat_model: dict[str, Any] | None = None,
     ) -> "TrustReport":
         return cls(
             model_name=model_name,
@@ -59,6 +61,7 @@ class TrustReport:
             recommendations=recommendations,
             analysis_trace=analysis_trace or [],
             remediation_plan=remediation_plan or [],
+            threat_model=threat_model or {},
         )
 
     def to_dict(self) -> dict[str, Any]:

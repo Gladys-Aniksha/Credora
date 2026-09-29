@@ -20,6 +20,8 @@ def render_reports_page(
     model_name: str,
     generated_at: str,
     trust_score: float,
+    trust_score_issued: bool,
+    threat_model: dict,
     remediation_plan: list[dict],
     analysis_trace: list[dict],
 ) -> None:
@@ -35,7 +37,8 @@ def render_reports_page(
         with st.container(border=True):
             st.markdown("### Generated Artifact")
             st.markdown(f"<div class='path-box'>{h(report_path)}</div>", unsafe_allow_html=True)
-            st.caption(f"Generated {format_time(generated_at)} | Trust score {trust_score:.1f}/100")
+            score_text = f"Trust score {trust_score:.1f}/100" if trust_score_issued else "Trust score not issued"
+            st.caption(f"Generated {format_time(generated_at)} | {score_text}")
             st.download_button(
                 "Download JSON report",
                 json.dumps(report_data, indent=2),
@@ -108,5 +111,33 @@ def render_reports_page(
                 st.caption(step.get("evidence", ""))
         else:
             st.info("Run this model again to add a deep-analysis trace to the report.")
+    with st.expander("Threat model summary", expanded=False):
+        summary = threat_model.get("summary", {})
+        st.markdown(f"**Overall posture:** {h(summary.get('overall_threat_posture', 'Not assessed'))}")
+        st.caption(
+            f"{int(summary.get('threats_identified', 0))} threats | "
+            f"{int(summary.get('critical', 0))} critical | {int(summary.get('high', 0))} high | "
+            f"{int(summary.get('not_assessed', 0))} not assessed"
+        )
+        priority_threats = [
+            threat for threat in threat_model.get("threats", [])
+            if threat.get("residual_severity") in {"Critical", "High"}
+        ]
+        if priority_threats:
+            st.dataframe(
+                [
+                    {
+                        "Threat": f"{item.get('id')} - {item.get('name')}",
+                        "Status": item.get("detection_status"),
+                        "Residual risk": item.get("residual_severity"),
+                        "Required action": item.get("recommended_action"),
+                    }
+                    for item in priority_threats
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.success("No critical or high residual threats were identified by available evidence.")
     with st.expander("Raw assessment JSON"):
         st.json(report_data)

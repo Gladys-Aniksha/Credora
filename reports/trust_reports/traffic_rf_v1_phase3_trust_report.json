@@ -1,13 +1,13 @@
 {
   "model_name": "traffic_rf_v1",
-  "generated_at": "2026-09-27T09:02:21.396732+00:00",
-  "trust_score": 70.0,
-  "status": "warning",
+  "generated_at": "2026-09-29T04:46:18.840651+00:00",
+  "trust_score": 0.0,
+  "status": "fail",
   "module_results": [
     {
       "module": "model_verification",
-      "status": "pass",
-      "score": 80.0,
+      "status": "fail",
+      "score": 45.0,
       "summary": "Verified traffic_rf_v1.joblib; SHA256 captured and format reviewed.",
       "findings": [
         {
@@ -19,10 +19,10 @@
         },
         {
           "module": "model_verification",
-          "title": "Hash matched trusted baseline",
-          "severity": "info",
-          "description": "The model hash matches a server-side or package-verified baseline.",
-          "recommendation": ""
+          "title": "Hash mismatch",
+          "severity": "critical",
+          "description": "The model hash does not match the trusted baseline.",
+          "recommendation": "Do not deploy until the model source is verified."
         },
         {
           "module": "model_verification",
@@ -1289,16 +1289,16 @@
     },
     {
       "module": "runtime_integrity",
-      "status": "pass",
-      "score": 80.0,
+      "status": "fail",
+      "score": 0.0,
       "summary": "Compared the runtime model artifact with its approved integrity baseline.",
       "findings": [
         {
           "module": "runtime_integrity",
-          "title": "Runtime hash baseline established",
-          "severity": "info",
-          "description": "The model artifact matches the approved SHA-256 value.",
-          "recommendation": "Recheck this hash at service startup and on a scheduled runtime interval."
+          "title": "Runtime model hash changed",
+          "severity": "critical",
+          "description": "The model artifact no longer matches its approved SHA-256 baseline.",
+          "recommendation": "Stop model serving, restore the approved artifact, investigate the file change, and rotate the deployment only after re-signing it."
         },
         {
           "module": "runtime_integrity",
@@ -1312,35 +1312,172 @@
         "integrity_state": "changed",
         "model_path": "C:\\Users\\glady\\Mini project\\data\\sample_models\\traffic_rf_v1.joblib",
         "actual_sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
-        "expected_sha256": "fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73",
+        "expected_sha256": "16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3",
         "expected_sha256_source": "server_registry",
         "signature_valid": false,
         "file_size_bytes": 184753,
         "file_modified_at": "2026-08-18T10:00:52.462058+00:00",
-        "checked_at": "2026-09-27T09:02:21.373035+00:00"
+        "checked_at": "2026-09-29T04:46:18.827414+00:00"
       }
     },
     {
-      "module": "deployment_gate",
+      "module": "security_gate",
       "status": "fail",
-      "score": 83.33,
-      "summary": "Production deployment blocked by 1 required gate check(s).",
+      "score": 50.0,
+      "summary": "Security Gate blocked deployment because 4 mandatory check(s) failed.",
       "findings": [
         {
-          "module": "deployment_gate",
-          "title": "Deployment blocked",
-          "severity": "high",
-          "description": "Failed production gate checks: Trust score.",
-          "recommendation": "Resolve every failed gate check and rerun the complete Phase 3 assessment."
+          "module": "security_gate",
+          "title": "Security Gate blocked",
+          "severity": "critical",
+          "description": "Failed mandatory checks: Verified model signature, Trusted model hash, Safe artifact validation, Runtime artifact integrity.",
+          "recommendation": "Resolve every failed security check and rerun the complete assessment before calculating a Trust Score."
         }
       ],
       "details": {
         "decision": "blocked",
         "checks": [
           {
+            "check": "Verified model signature",
+            "passed": false,
+            "actual": "missing or invalid",
+            "target": "verified",
+            "required": true
+          },
+          {
+            "check": "Trusted model hash",
+            "passed": false,
+            "actual": "server_registry",
+            "target": "trusted baseline",
+            "required": true
+          },
+          {
+            "check": "Safe artifact validation",
+            "passed": false,
+            "actual": "fail",
+            "target": "pass or warning without critical findings",
+            "required": true
+          },
+          {
+            "check": "No critical dependency findings",
+            "passed": true,
+            "actual": 0,
+            "target": 0,
+            "required": true
+          },
+          {
+            "check": "No critical model-risk findings",
+            "passed": true,
+            "actual": 0,
+            "target": 0,
+            "required": true
+          },
+          {
+            "check": "Adversarial safety",
+            "passed": true,
+            "actual": 97.77,
+            "target": 80.0,
+            "required": true
+          },
+          {
+            "check": "Security-sensitive recall",
+            "passed": true,
+            "actual": 1.0,
+            "target": 0.9,
+            "required": true
+          },
+          {
+            "check": "Runtime artifact integrity",
+            "passed": false,
+            "actual": "changed",
+            "target": "verified",
+            "required": true
+          }
+        ],
+        "failed_checks": [
+          "Verified model signature",
+          "Trusted model hash",
+          "Safe artifact validation",
+          "Runtime artifact integrity"
+        ],
+        "trust_score_eligible": false
+      }
+    },
+    {
+      "module": "trust_drift_timeline",
+      "status": "not_run",
+      "score": 0.0,
+      "summary": "Trust drift was not evaluated because the Security Gate blocked Trust Score issuance.",
+      "findings": [],
+      "details": {
+        "blocked_by": "security_gate"
+      }
+    },
+    {
+      "module": "trust_score",
+      "status": "not_run",
+      "score": 0.0,
+      "summary": "Trust Score was not issued because the Security Gate failed.",
+      "findings": [
+        {
+          "module": "trust_score",
+          "title": "Trust Score not issued",
+          "severity": "critical",
+          "description": "Mandatory security evidence failed before weighted assurance scoring.",
+          "recommendation": "Resolve the failed Security Gate checks and rerun the assessment."
+        }
+      ],
+      "details": {
+        "issued": false,
+        "blocked_by": "security_gate",
+        "failed_security_checks": [
+          "Verified model signature",
+          "Trusted model hash",
+          "Safe artifact validation",
+          "Runtime artifact integrity"
+        ],
+        "weights": {},
+        "expected_modules": [],
+        "modules_scored": [],
+        "missing_modules": [],
+        "module_coverage": 0.0
+      }
+    },
+    {
+      "module": "deployment_gate",
+      "status": "fail",
+      "score": 20.0,
+      "summary": "Production deployment blocked by 4 required gate check(s).",
+      "findings": [
+        {
+          "module": "deployment_gate",
+          "title": "Deployment blocked",
+          "severity": "high",
+          "description": "Failed production gate checks: Security Gate, Trust score issued, Trust score, No high-risk findings.",
+          "recommendation": "Do not deploy until the model source is verified."
+        }
+      ],
+      "details": {
+        "decision": "blocked",
+        "checks": [
+          {
+            "check": "Security Gate",
+            "passed": false,
+            "actual": "blocked",
+            "target": "passed",
+            "required": true
+          },
+          {
+            "check": "Trust score issued",
+            "passed": false,
+            "actual": "not issued",
+            "target": "issued",
+            "required": true
+          },
+          {
             "check": "Trust score",
             "passed": false,
-            "actual": 70.0,
+            "actual": 0.0,
             "target": 85.0,
             "required": true
           },
@@ -1352,156 +1489,32 @@
             "required": true
           },
           {
-            "check": "Adversarial resilience",
-            "passed": true,
-            "actual": 97.77,
-            "target": 80.0,
-            "required": true
-          },
-          {
-            "check": "Runtime artifact integrity",
-            "passed": true,
-            "actual": "pass",
-            "target": "pass",
-            "required": true
-          },
-          {
-            "check": "Security-sensitive recall",
-            "passed": true,
-            "actual": 1.0,
-            "target": 0.9,
-            "required": true
-          },
-          {
             "check": "No high-risk findings",
-            "passed": true,
-            "actual": 0,
+            "passed": false,
+            "actual": 4,
             "target": 0,
             "required": true
           }
         ],
         "failed_checks": [
-          "Trust score"
+          "Security Gate",
+          "Trust score issued",
+          "Trust score",
+          "No high-risk findings"
         ],
-        "high_risk_finding_count": 0,
+        "high_risk_finding_count": 4,
         "medium_risk_finding_count": 6,
         "policy": {
           "minimum_trust_score": 85.0,
-          "minimum_classifier_score": 85.0,
-          "minimum_adversarial_score": 80.0,
-          "minimum_sensitive_recall": 0.9
+          "minimum_classifier_score": 85.0
         }
-      }
-    },
-    {
-      "module": "trust_drift_timeline",
-      "status": "pass",
-      "score": 85.0,
-      "summary": "Compared current trust score with 44 previous scan(s) for this model.",
-      "findings": [
-        {
-          "module": "trust_drift_timeline",
-          "title": "Trust score is stable",
-          "severity": "info",
-          "description": "No meaningful trust regression was detected against previous scans.",
-          "recommendation": ""
-        },
-        {
-          "module": "trust_drift_timeline",
-          "title": "Below historical best",
-          "severity": "medium",
-          "description": "Current score is 28.18 points below this model's best recorded score.",
-          "recommendation": "Inspect the trust timeline for version regressions."
-        }
-      ],
-      "details": {
-        "previous_scan_count": 44,
-        "previous_latest_score": 70.0,
-        "previous_best_score": 98.18,
-        "drop_from_latest": 0.0,
-        "drop_from_best": 28.18
-      }
-    },
-    {
-      "module": "trust_score",
-      "status": "warning",
-      "score": 70.0,
-      "summary": "Unsigned model provenance caps the maximum trust score until a signed package is verified.",
-      "findings": [
-        {
-          "module": "trust_score",
-          "title": "High-risk findings present",
-          "severity": "high",
-          "description": "There are 1 high or critical finding(s).",
-          "recommendation": "Resolve high-risk findings before deployment."
-        },
-        {
-          "module": "trust_score",
-          "title": "Raw model provenance cap applied",
-          "severity": "medium",
-          "description": "Unsigned .joblib, .pkl, and .onnx uploads cannot score above 70/100.",
-          "recommendation": "Package and sign the model with Credora before requesting deployment approval."
-        }
-      ],
-      "details": {
-        "weights": {
-          "model_verification": 0.09,
-          "dependency_scanner": 0.06,
-          "classifier_evaluation": 0.13,
-          "robustness_testing": 0.08,
-          "data_drift_detection": 0.07,
-          "explainability": 0.07,
-          "dataset_leakage": 0.08,
-          "privacy_risk": 0.07,
-          "behavior_analysis": 0.08,
-          "model_risk_analyzer": 0.05,
-          "adversarial_validation": 0.09,
-          "runtime_integrity": 0.06,
-          "deployment_gate": 0.05,
-          "trust_drift_timeline": 0.02
-        },
-        "expected_modules": [
-          "model_verification",
-          "dependency_scanner",
-          "classifier_evaluation",
-          "robustness_testing",
-          "data_drift_detection",
-          "explainability",
-          "dataset_leakage",
-          "privacy_risk",
-          "behavior_analysis",
-          "model_risk_analyzer",
-          "adversarial_validation",
-          "runtime_integrity",
-          "deployment_gate",
-          "trust_drift_timeline"
-        ],
-        "modules_scored": [
-          "model_verification",
-          "dependency_scanner",
-          "classifier_evaluation",
-          "robustness_testing",
-          "data_drift_detection",
-          "explainability",
-          "dataset_leakage",
-          "privacy_risk",
-          "behavior_analysis",
-          "model_risk_analyzer",
-          "adversarial_validation",
-          "runtime_integrity",
-          "deployment_gate",
-          "trust_drift_timeline"
-        ],
-        "missing_modules": [],
-        "module_coverage": 1.0,
-        "deployment_decision": "blocked",
-        "raw_model_trust_cap": 70.0
       }
     }
   ],
   "recommendations": [
     "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
     "Create a signed .credora package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .joblib uploads outside the trusted packaging pipeline.",
+    "Stop model serving, restore the verified signed artifact from the release store, investigate the replacement event, and rotate deployment credentials if modification was unauthorized.",
     "Install or repair pip-audit in the scanner environment, confirm vulnerability-database access, and rerun the dependency assessment so the release is based on a completed audit."
   ],
   "docx_report_path": null,
@@ -1509,14 +1522,15 @@
     {
       "step": 1,
       "module": "model_verification",
-      "status": "pass",
-      "score": 80.0,
+      "status": "fail",
+      "score": 45.0,
       "method": "Calculated the artifact SHA-256, checked its format and size, and compared it with supplied identity metadata.",
       "evidence": "File traffic_rf_v1.joblib, format .joblib, size 0.176 MB, SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
       "conclusion": "Verified traffic_rf_v1.joblib; SHA256 captured and format reviewed.",
-      "issues_found": 2,
+      "issues_found": 3,
       "issue_titles": [
         "Pickle-based model format",
+        "Hash mismatch",
         "Missing or invalid signature"
       ]
     },
@@ -1539,7 +1553,7 @@
       "status": "pass",
       "score": 100.0,
       "method": "Ran the uploaded model against every labeled flow and calculated overall and per-class prediction metrics.",
-      "evidence": "Accuracy 1.0, weighted F1 1.0, recall 1.0.",
+      "evidence": "Observed evaluation accuracy 1.0, weighted F1 1.0, recall 1.0.",
       "conclusion": "Evaluated 225 encrypted traffic flow record(s).",
       "issues_found": 0,
       "issue_titles": []
@@ -1638,54 +1652,65 @@
     {
       "step": 12,
       "module": "runtime_integrity",
-      "status": "pass",
-      "score": 80.0,
+      "status": "fail",
+      "score": 0.0,
       "method": "Recalculated the model hash and compared it with the approved runtime identity baseline.",
-      "evidence": "Integrity state changed; expected SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73; observed SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "evidence": "Integrity state changed; expected SHA-256 16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3; observed SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
       "conclusion": "Compared the runtime model artifact with its approved integrity baseline.",
-      "issues_found": 1,
+      "issues_found": 2,
       "issue_titles": [
+        "Runtime model hash changed",
         "Runtime signature evidence missing"
       ]
     },
     {
       "step": 13,
-      "module": "deployment_gate",
+      "module": "security_gate",
       "status": "fail",
-      "score": 83.33,
-      "method": "Applied mandatory trust, classifier, adversarial, integrity, and security-sensitive recall thresholds.",
-      "evidence": "Decision blocked; failed mandatory checks: Trust score; high-risk findings 0; medium-risk findings 6.",
-      "conclusion": "Production deployment blocked by 1 required gate check(s).",
+      "score": 50.0,
+      "method": "Evaluated the evidence produced by this assessment module.",
+      "evidence": "Security Gate blocked deployment because 4 mandatory check(s) failed.",
+      "conclusion": "Security Gate blocked deployment because 4 mandatory check(s) failed.",
       "issues_found": 1,
       "issue_titles": [
-        "Deployment blocked"
+        "Security Gate blocked"
       ]
     },
     {
       "step": 14,
       "module": "trust_drift_timeline",
-      "status": "pass",
-      "score": 85.0,
+      "status": "not_run",
+      "score": 0.0,
       "method": "Compared the current trust result with earlier assessments for the same model identity.",
-      "evidence": "Previous scans 44; change from latest 0.0; distance from historical best 28.18.",
-      "conclusion": "Compared current trust score with 44 previous scan(s) for this model.",
-      "issues_found": 1,
-      "issue_titles": [
-        "Below historical best"
-      ]
+      "evidence": "Previous scans 0; change from latest not available; distance from historical best not available.",
+      "conclusion": "Trust drift was not evaluated because the Security Gate blocked Trust Score issuance.",
+      "issues_found": 0,
+      "issue_titles": []
     },
     {
       "step": 15,
       "module": "trust_score",
-      "status": "warning",
-      "score": 70.0,
+      "status": "not_run",
+      "score": 0.0,
       "method": "Combined module scores using the published Credora weighting policy.",
-      "evidence": "Final weighted score 70.0/100; deployment decision blocked.",
-      "conclusion": "Unsigned model provenance caps the maximum trust score until a signed package is verified.",
-      "issues_found": 2,
+      "evidence": "Final weighted score 0.0/100; deployment decision not available.",
+      "conclusion": "Trust Score was not issued because the Security Gate failed.",
+      "issues_found": 1,
       "issue_titles": [
-        "High-risk findings present",
-        "Raw model provenance cap applied"
+        "Trust Score not issued"
+      ]
+    },
+    {
+      "step": 16,
+      "module": "deployment_gate",
+      "status": "fail",
+      "score": 20.0,
+      "method": "Applied mandatory trust, classifier, adversarial, integrity, and security-sensitive recall thresholds.",
+      "evidence": "Decision blocked; failed mandatory checks: Security Gate, Trust score issued, Trust score, No high-risk findings; high-risk findings 4; medium-risk findings 6.",
+      "conclusion": "Production deployment blocked by 4 required gate check(s).",
+      "issues_found": 1,
+      "issue_titles": [
+        "Deployment blocked"
       ]
     }
   ],
@@ -1694,8 +1719,8 @@
       "priority": "P0",
       "module": "deployment_gate",
       "title": "Keep deployment blocked until mandatory evidence passes",
-      "evidence": "Decision blocked; failed mandatory checks: Trust score; high-risk findings 0; medium-risk findings 6.",
-      "diagnosis": "The release fails mandatory controls: Trust score.",
+      "evidence": "Decision blocked; failed mandatory checks: Security Gate, Trust score issued, Trust score, No high-risk findings; high-risk findings 4; medium-risk findings 6.",
+      "diagnosis": "The release fails mandatory controls: Security Gate, Trust score issued, Trust score, No high-risk findings.",
       "fix": "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
       "validation": "Every mandatory check must report passed, with no high/critical finding and a final decision of approved or explicitly reviewed conditional according to policy.",
       "finding_titles": [
@@ -1704,7 +1729,7 @@
       "id": "FIX-01"
     },
     {
-      "priority": "P1",
+      "priority": "P0",
       "module": "model_verification",
       "title": "Bind the model artifact to a trusted release identity",
       "evidence": "Artifact traffic_rf_v1 uses .joblib; observed SHA-256 is fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
@@ -1713,11 +1738,26 @@
       "validation": "Verify the package with an independently supplied public key, then require the extracted model hash to equal the approved release hash before loading it.",
       "finding_titles": [
         "Pickle-based model format",
+        "Hash mismatch",
         "Missing or invalid signature",
         "Unsafe serialization family",
         "Model signature not verified"
       ],
       "id": "FIX-02"
+    },
+    {
+      "priority": "P0",
+      "module": "runtime_integrity",
+      "title": "Restore the approved runtime artifact",
+      "evidence": "Integrity state changed; expected SHA-256 16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3; observed SHA-256 fb61da656964500cc7af0a6986d07a92a42b960f4491244bd1f114c9ee5d2a73.",
+      "diagnosis": "The model currently available to the serving process is missing, changed, or not tied to the approved identity.",
+      "fix": "Stop model serving, restore the verified signed artifact from the release store, investigate the replacement event, and rotate deployment credentials if modification was unauthorized.",
+      "validation": "Resume serving only after three consecutive integrity checks match the approved SHA-256 and no new tamper alert is created.",
+      "finding_titles": [
+        "Runtime model hash changed",
+        "Runtime signature evidence missing"
+      ],
+      "id": "FIX-03"
     },
     {
       "priority": "P2",
@@ -1730,7 +1770,621 @@
       "finding_titles": [
         "Missing requirements file"
       ],
-      "id": "FIX-03"
+      "id": "FIX-04"
     }
-  ]
+  ],
+  "threat_model": {
+    "model_name": "traffic_rf_v1",
+    "method": "Risk = Likelihood x Impact; residual risk is reduced only when existing control evidence passes.",
+    "summary": {
+      "threats_identified": 15,
+      "critical": 1,
+      "high": 7,
+      "medium": 3,
+      "low": 4,
+      "mitigated": 4,
+      "detected": 0,
+      "warning": 2,
+      "high_risk": 7,
+      "not_assessed": 2,
+      "overall_threat_posture": "CRITICAL RISK"
+    },
+    "protected_assets": [
+      {
+        "name": "ML model artifact",
+        "description": "Serialized classifier or ONNX graph assessed by Credora.",
+        "importance": "Critical",
+        "impact": "Tampering can change predictions or execute unsafe behavior."
+      },
+      {
+        "name": "Model metadata",
+        "description": "Declared identity, version, features, labels, and training context.",
+        "importance": "High",
+        "impact": "Manipulation can invalidate checks and misrepresent model behavior."
+      },
+      {
+        "name": "Evaluation dataset",
+        "description": "Labeled evidence used for classifier and safety measurements.",
+        "importance": "Critical",
+        "impact": "Poisoning or leakage can produce misleading evaluation results."
+      },
+      {
+        "name": "Dependency files",
+        "description": "Declared Python packages and versions used by the model.",
+        "importance": "High",
+        "impact": "Compromise can introduce vulnerable or malicious code."
+      },
+      {
+        "name": "Model signatures",
+        "description": "Cryptographic evidence binding a package to its signer.",
+        "importance": "Critical",
+        "impact": "Forgery can make an untrusted artifact appear approved."
+      },
+      {
+        "name": "Signing keys",
+        "description": "Private and trusted public keys used for model and report signatures.",
+        "importance": "Critical",
+        "impact": "Key compromise defeats provenance guarantees."
+      },
+      {
+        "name": "Credora trust reports",
+        "description": "Persisted assessment evidence and recommendations.",
+        "importance": "High",
+        "impact": "Tampering can alter the recorded security decision."
+      },
+      {
+        "name": "Trust Score",
+        "description": "Weighted assurance score issued only after the Security Gate passes.",
+        "importance": "High",
+        "impact": "Manipulation can misstate the model's overall assurance."
+      },
+      {
+        "name": "Deployment decision",
+        "description": "Security and policy decision controlling production release.",
+        "importance": "Critical",
+        "impact": "Unauthorized approval can release an unsafe model."
+      },
+      {
+        "name": "Runtime integrity information",
+        "description": "Approved hashes and later runtime verification observations.",
+        "importance": "Critical",
+        "impact": "Loss of integrity evidence can hide model replacement."
+      },
+      {
+        "name": "Drift monitoring information",
+        "description": "Distribution and production-window observations.",
+        "importance": "High",
+        "impact": "Manipulation can conceal degraded or shifted behavior."
+      },
+      {
+        "name": "User and account information",
+        "description": "Credentials, roles, sessions, and ownership boundaries.",
+        "importance": "Critical",
+        "impact": "Compromise can expose reports or authorize malicious uploads."
+      }
+    ],
+    "threat_actors": [
+      {
+        "name": "Malicious Model Provider",
+        "capabilities": "Can prepare model, metadata, dependencies, and evaluation evidence.",
+        "objectives": "Introduce backdoors, hide weak behavior, or obtain deployment approval."
+      },
+      {
+        "name": "Supply-Chain Attacker",
+        "capabilities": "Can modify artifacts, packages, dependencies, or distribution paths.",
+        "objectives": "Inject malicious code or substitute a trusted model."
+      },
+      {
+        "name": "External Attacker",
+        "capabilities": "Can probe exposed authentication, upload, API, and monitoring interfaces.",
+        "objectives": "Gain unauthorized access, alter evidence, or submit malicious inputs."
+      },
+      {
+        "name": "Compromised User Account",
+        "capabilities": "Inherits the permissions and data access of a legitimate account.",
+        "objectives": "Upload unsafe artifacts, steal reports, or misuse authorized workflows."
+      },
+      {
+        "name": "Malicious Insider",
+        "capabilities": "May have legitimate access to models, datasets, policies, or administrative actions.",
+        "objectives": "Manipulate evidence, approve unsafe models, or conceal security findings."
+      }
+    ],
+    "attack_surfaces": [
+      "Model upload",
+      "Dataset upload",
+      "Dependency upload",
+      "Metadata upload",
+      "REST API",
+      "Authentication and login",
+      "Dashboard",
+      "Model deserialization",
+      "Pickle/joblib loading",
+      "ONNX processing",
+      "Database",
+      "Signed model packages",
+      "Trust reports",
+      "Production flow ingestion",
+      "Runtime monitoring interfaces"
+    ],
+    "trust_boundaries": [
+      {
+        "source": "Untrusted user artifact",
+        "control": "Upload validation",
+        "destination": "Credora assessment environment"
+      },
+      {
+        "source": "Model provider",
+        "control": "Signed package and signature verification",
+        "destination": "Verified model"
+      },
+      {
+        "source": "Production traffic",
+        "control": "Flow metadata extraction",
+        "destination": "Credora monitoring"
+      },
+      {
+        "source": "User",
+        "control": "Authentication and role authorization",
+        "destination": "Authorized Credora resources"
+      }
+    ],
+    "threats": [
+      {
+        "id": "TM-001",
+        "name": "Model Artifact Tampering",
+        "description": "A model is changed after approval or while in transit.",
+        "threat_actor": "Supply-Chain Attacker",
+        "target_asset": "ML model artifact",
+        "attack_surface": "Model upload",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "SHA-256 baseline verification",
+          "Package signature verification",
+          "Runtime integrity monitoring"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "model_verification: FAIL; runtime_integrity: FAIL; security_gate: FAIL",
+        "residual_risk": 12,
+        "residual_severity": "High",
+        "residual_explanation": "A compromised signing key or trusted host remains outside artifact verification.",
+        "recommended_action": "Reject the artifact and restore a package verified against a trusted signer."
+      },
+      {
+        "id": "TM-002",
+        "name": "Malicious Pickle/Joblib Deserialization",
+        "description": "A serialized Python model attempts unsafe object construction or code execution.",
+        "threat_actor": "Malicious Model Provider",
+        "target_asset": "ML model artifact",
+        "attack_surface": "Pickle/joblib loading",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Restricted model loading",
+          "Pickle allow-list inspection",
+          "Artifact format validation"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "model_verification: FAIL; model_risk_analyzer: WARNING",
+        "residual_risk": 12,
+        "residual_severity": "High",
+        "residual_explanation": "A newly discovered unsafe serialization primitive may require an allow-list update.",
+        "recommended_action": "Use ONNX or a signed package and reject unsupported pickle globals."
+      },
+      {
+        "id": "TM-003",
+        "name": "Vulnerable or Malicious Dependency",
+        "description": "A declared dependency contains a known vulnerability or malicious package.",
+        "threat_actor": "Supply-Chain Attacker",
+        "target_asset": "Dependency files",
+        "attack_surface": "Dependency upload",
+        "likelihood": "High",
+        "impact": "High",
+        "initial_risk": 9,
+        "severity": "High",
+        "existing_controls": [
+          "Dependency vulnerability scanning",
+          "Pinned dependency review"
+        ],
+        "detection_status": "WARNING",
+        "control_result": "dependency_scanner: WARNING",
+        "residual_risk": 6,
+        "residual_severity": "Medium",
+        "residual_explanation": "Unknown vulnerabilities and compromised upstream releases can remain undetected.",
+        "recommended_action": "Upgrade or remove the affected dependency and rerun the scan."
+      },
+      {
+        "id": "TM-004",
+        "name": "Evaluation Dataset Manipulation",
+        "description": "Evaluation evidence is poisoned, leaked, or selected to inflate performance.",
+        "threat_actor": "Malicious Model Provider",
+        "target_asset": "Evaluation dataset",
+        "attack_surface": "Dataset upload",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Holdout overlap analysis",
+          "Generalization checks",
+          "Distribution comparison"
+        ],
+        "detection_status": "MITIGATED",
+        "control_result": "dataset_leakage: PASS; data_drift_detection: PASS",
+        "residual_risk": 3,
+        "residual_severity": "Low",
+        "residual_explanation": "Credora cannot prove that externally supplied labels are truthful.",
+        "recommended_action": "Repeat evaluation with an independently sourced, untouched holdout dataset."
+      },
+      {
+        "id": "TM-005",
+        "name": "Model Evasion or Adversarial Input",
+        "description": "Perturbed traffic features cause security-sensitive predictions to fail.",
+        "threat_actor": "External Attacker",
+        "target_asset": "Deployment decision",
+        "attack_surface": "Production flow ingestion",
+        "likelihood": "Critical",
+        "impact": "Critical",
+        "initial_risk": 16,
+        "severity": "Critical",
+        "existing_controls": [
+          "Adversarial validation",
+          "Perturbation testing",
+          "Sensitive-class recall gate"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "adversarial_validation: PASS; robustness_testing: PASS; security_gate: FAIL",
+        "residual_risk": 16,
+        "residual_severity": "Critical",
+        "residual_explanation": "Unmodeled attacks can differ from the evaluated perturbation scenarios.",
+        "recommended_action": "Retrain with representative evasive traffic and satisfy the Security Gate thresholds."
+      },
+      {
+        "id": "TM-006",
+        "name": "Weak or Unreliable Classifier",
+        "description": "The classifier has poor generalization, weak classes, or unstable predictions.",
+        "threat_actor": "Malicious Model Provider",
+        "target_asset": "Deployment decision",
+        "attack_surface": "Dataset upload",
+        "likelihood": "High",
+        "impact": "High",
+        "initial_risk": 9,
+        "severity": "High",
+        "existing_controls": [
+          "Precision/recall/F1 evaluation",
+          "Confusion analysis",
+          "Robustness testing"
+        ],
+        "detection_status": "MITIGATED",
+        "control_result": "classifier_evaluation: PASS; behavior_analysis: PASS; robustness_testing: PASS",
+        "residual_risk": 3,
+        "residual_severity": "Low",
+        "residual_explanation": "Observed evaluation performance does not guarantee future production performance.",
+        "recommended_action": "Improve weak classes and repeat evaluation on independent evidence."
+      },
+      {
+        "id": "TM-007",
+        "name": "Model Backdoor or Suspicious Behaviour",
+        "description": "A model contains behavior that activates only for hidden or rare patterns.",
+        "threat_actor": "Malicious Model Provider",
+        "target_asset": "ML model artifact",
+        "attack_surface": "Model upload",
+        "likelihood": "Medium",
+        "impact": "Critical",
+        "initial_risk": 8,
+        "severity": "Medium",
+        "existing_controls": [
+          "Behavior analysis",
+          "Model-risk indicators",
+          "Feature influence analysis"
+        ],
+        "detection_status": "WARNING",
+        "control_result": "behavior_analysis: PASS; model_risk_analyzer: WARNING; explainability: PASS",
+        "residual_risk": 6,
+        "residual_severity": "Medium",
+        "residual_explanation": "A targeted backdoor may remain dormant outside the evaluated inputs.",
+        "recommended_action": "Investigate suspicious feature reliance and test trigger-oriented datasets."
+      },
+      {
+        "id": "TM-008",
+        "name": "Runtime Model Replacement",
+        "description": "The deployed artifact is replaced after assessment.",
+        "threat_actor": "Malicious Insider",
+        "target_asset": "Runtime integrity information",
+        "attack_surface": "Runtime monitoring interfaces",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Runtime SHA-256 verification",
+          "Approved signature baseline",
+          "Integrity alerts"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "runtime_integrity: FAIL; security_gate: FAIL",
+        "residual_risk": 12,
+        "residual_severity": "High",
+        "residual_explanation": "Monitoring cannot be trusted after full host compromise.",
+        "recommended_action": "Stop serving the model, restore the approved artifact, and investigate the change."
+      },
+      {
+        "id": "TM-009",
+        "name": "Production Data Drift",
+        "description": "Production traffic diverges from the assessed data distribution.",
+        "threat_actor": "External Attacker",
+        "target_asset": "Drift monitoring information",
+        "attack_surface": "Production flow ingestion",
+        "likelihood": "Critical",
+        "impact": "High",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "PSI drift detection",
+          "Trust drift history",
+          "Production alerts"
+        ],
+        "detection_status": "MITIGATED",
+        "control_result": "data_drift_detection: PASS; trust_drift_timeline: NOT_RUN",
+        "residual_risk": 3,
+        "residual_severity": "Low",
+        "residual_explanation": "Drift may emerge between monitoring windows or outside captured metadata.",
+        "recommended_action": "Investigate shifted features and reassess or retrain the model."
+      },
+      {
+        "id": "TM-010",
+        "name": "Trust Report Tampering",
+        "description": "Stored or exported assessment evidence is altered after generation.",
+        "threat_actor": "Malicious Insider",
+        "target_asset": "Credora trust reports",
+        "attack_surface": "Trust reports",
+        "likelihood": "Medium",
+        "impact": "Critical",
+        "initial_risk": 8,
+        "severity": "Medium",
+        "existing_controls": [
+          "Ed25519 report signing",
+          "Trusted signer verification"
+        ],
+        "detection_status": "NOT ASSESSED",
+        "control_result": "No assessment evidence",
+        "residual_risk": 8,
+        "residual_severity": "Medium",
+        "residual_explanation": "A stolen signing key can produce apparently valid altered reports.",
+        "recommended_action": "Sign the report and verify it against an active trusted signer before release."
+      },
+      {
+        "id": "TM-011",
+        "name": "Unauthorized Model Access",
+        "description": "A user reads or modifies a model assessment outside their authorization.",
+        "threat_actor": "External Attacker",
+        "target_asset": "User and account information",
+        "attack_surface": "REST API",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Authentication",
+          "Role-based authorization",
+          "Owner-scoped records"
+        ],
+        "detection_status": "MITIGATED",
+        "control_result": "auth_rbac: PASS",
+        "residual_risk": 3,
+        "residual_severity": "Low",
+        "residual_explanation": "Valid credentials can still be abused by a compromised account.",
+        "recommended_action": "Review account roles, revoke sessions, and inspect audit events."
+      },
+      {
+        "id": "TM-012",
+        "name": "Metadata Manipulation",
+        "description": "Uploaded metadata misstates identity, features, labels, or policy information.",
+        "threat_actor": "Malicious Model Provider",
+        "target_asset": "Model metadata",
+        "attack_surface": "Metadata upload",
+        "likelihood": "High",
+        "impact": "High",
+        "initial_risk": 9,
+        "severity": "High",
+        "existing_controls": [
+          "Metadata validation",
+          "Server-side policy enforcement",
+          "Signed package manifest"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "model_verification: FAIL; model_risk_analyzer: WARNING",
+        "residual_risk": 9,
+        "residual_severity": "High",
+        "residual_explanation": "Semantically false but structurally valid metadata may require independent review.",
+        "recommended_action": "Use signed metadata and correct all missing or inconsistent fields."
+      },
+      {
+        "id": "TM-013",
+        "name": "Invalid or Forged Model Signature",
+        "description": "An artifact carries no valid signature or claims an untrusted signer.",
+        "threat_actor": "Supply-Chain Attacker",
+        "target_asset": "Model signatures",
+        "attack_surface": "Signed model packages",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Package signature verification",
+          "Trusted public-key validation",
+          "Fail-closed Security Gate"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "model_verification: FAIL; security_gate: FAIL",
+        "residual_risk": 12,
+        "residual_severity": "High",
+        "residual_explanation": "The check cannot detect a compromised trusted private key.",
+        "recommended_action": "Reject the package and verify it against a trusted public key."
+      },
+      {
+        "id": "TM-014",
+        "name": "Compromised User Account",
+        "description": "A legitimate account is used by an unauthorized party.",
+        "threat_actor": "Compromised User Account",
+        "target_asset": "User and account information",
+        "attack_surface": "Authentication and login",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Password hashing",
+          "Session revocation",
+          "Role-based access",
+          "Audit logs"
+        ],
+        "detection_status": "NOT ASSESSED",
+        "control_result": "No assessment evidence",
+        "residual_risk": 12,
+        "residual_severity": "High",
+        "residual_explanation": "Credora does not currently establish that a valid login belongs to the expected person.",
+        "recommended_action": "Reset credentials, revoke sessions, and review audit activity."
+      },
+      {
+        "id": "TM-015",
+        "name": "Supply-Chain Model Modification",
+        "description": "A model or its dependencies are modified in the delivery chain.",
+        "threat_actor": "Supply-Chain Attacker",
+        "target_asset": "ML model artifact",
+        "attack_surface": "Signed model packages",
+        "likelihood": "High",
+        "impact": "Critical",
+        "initial_risk": 12,
+        "severity": "High",
+        "existing_controls": [
+          "Signed package verification",
+          "Dependency scanning",
+          "Runtime hash monitoring"
+        ],
+        "detection_status": "HIGH RISK",
+        "control_result": "model_verification: FAIL; dependency_scanner: WARNING; runtime_integrity: FAIL; security_gate: FAIL",
+        "residual_risk": 12,
+        "residual_severity": "High",
+        "residual_explanation": "Compromise before signing remains possible if the build environment is untrusted.",
+        "recommended_action": "Rebuild from a trusted source and verify the complete signed package."
+      }
+    ],
+    "control_matrix": [
+      {
+        "threat": "TM-001 - Model Artifact Tampering",
+        "existing_control": "SHA-256 baseline verification, Package signature verification, Runtime integrity monitoring",
+        "result": "HIGH RISK",
+        "residual_risk": "High"
+      },
+      {
+        "threat": "TM-002 - Malicious Pickle/Joblib Deserialization",
+        "existing_control": "Restricted model loading, Pickle allow-list inspection, Artifact format validation",
+        "result": "HIGH RISK",
+        "residual_risk": "High"
+      },
+      {
+        "threat": "TM-003 - Vulnerable or Malicious Dependency",
+        "existing_control": "Dependency vulnerability scanning, Pinned dependency review",
+        "result": "WARNING",
+        "residual_risk": "Medium"
+      },
+      {
+        "threat": "TM-004 - Evaluation Dataset Manipulation",
+        "existing_control": "Holdout overlap analysis, Generalization checks, Distribution comparison",
+        "result": "MITIGATED",
+        "residual_risk": "Low"
+      },
+      {
+        "threat": "TM-005 - Model Evasion or Adversarial Input",
+        "existing_control": "Adversarial validation, Perturbation testing, Sensitive-class recall gate",
+        "result": "HIGH RISK",
+        "residual_risk": "Critical"
+      },
+      {
+        "threat": "TM-006 - Weak or Unreliable Classifier",
+        "existing_control": "Precision/recall/F1 evaluation, Confusion analysis, Robustness testing",
+        "result": "MITIGATED",
+        "residual_risk": "Low"
+      },
+      {
+        "threat": "TM-007 - Model Backdoor or Suspicious Behaviour",
+        "existing_control": "Behavior analysis, Model-risk indicators, Feature influence analysis",
+        "result": "WARNING",
+        "residual_risk": "Medium"
+      },
+      {
+        "threat": "TM-008 - Runtime Model Replacement",
+        "existing_control": "Runtime SHA-256 verification, Approved signature baseline, Integrity alerts",
+        "result": "HIGH RISK",
+        "residual_risk": "High"
+      },
+      {
+        "threat": "TM-009 - Production Data Drift",
+        "existing_control": "PSI drift detection, Trust drift history, Production alerts",
+        "result": "MITIGATED",
+        "residual_risk": "Low"
+      },
+      {
+        "threat": "TM-010 - Trust Report Tampering",
+        "existing_control": "Ed25519 report signing, Trusted signer verification",
+        "result": "NOT ASSESSED",
+        "residual_risk": "Medium"
+      },
+      {
+        "threat": "TM-011 - Unauthorized Model Access",
+        "existing_control": "Authentication, Role-based authorization, Owner-scoped records",
+        "result": "MITIGATED",
+        "residual_risk": "Low"
+      },
+      {
+        "threat": "TM-012 - Metadata Manipulation",
+        "existing_control": "Metadata validation, Server-side policy enforcement, Signed package manifest",
+        "result": "HIGH RISK",
+        "residual_risk": "High"
+      },
+      {
+        "threat": "TM-013 - Invalid or Forged Model Signature",
+        "existing_control": "Package signature verification, Trusted public-key validation, Fail-closed Security Gate",
+        "result": "HIGH RISK",
+        "residual_risk": "High"
+      },
+      {
+        "threat": "TM-014 - Compromised User Account",
+        "existing_control": "Password hashing, Session revocation, Role-based access, Audit logs",
+        "result": "NOT ASSESSED",
+        "residual_risk": "High"
+      },
+      {
+        "threat": "TM-015 - Supply-Chain Model Modification",
+        "existing_control": "Signed package verification, Dependency scanning, Runtime hash monitoring",
+        "result": "HIGH RISK",
+        "residual_risk": "High"
+      }
+    ],
+    "security_assumptions": [
+      "The host operating system is trusted.",
+      "The Credora backend has not already been compromised.",
+      "Signing private keys are securely protected.",
+      "Trusted public keys are distributed securely.",
+      "Ground-truth evaluation labels are reasonably accurate.",
+      "Production metadata supplied to Credora has not already been maliciously altered.",
+      "Authorized administrators are trusted unless explicitly modeled otherwise."
+    ],
+    "out_of_scope_threats": [
+      "Fully compromised host operating system",
+      "Kernel or rootkit attacks",
+      "Physical theft of infrastructure",
+      "Compromised signing private key",
+      "Cryptographic break of Ed25519 or SHA-256",
+      "Attacks against underlying network hardware",
+      "Full compromise of external traffic-capture tools",
+      "Malicious privileged system administrator"
+    ]
+  }
 }

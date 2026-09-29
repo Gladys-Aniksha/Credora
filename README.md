@@ -9,8 +9,11 @@ Credora now runs a security-first model trust workflow:
 - Phase 1 hardens uploads, API access, signed package trust, raw pickle/joblib handling, trusted hashes, and model loading preflight checks.
 - Phase 2 adds deeper truthfulness checks: SHAP fallback explainability, train/test leakage detection, train/test F1 comparison, and privacy/memorization confidence-gap analysis.
 - Phase 3 provides release workflow polish: signed `.credora` package release gates, CI validation, dashboard evidence, and one-command local verification.
+- Phase 4 signs final JSON trust reports with Ed25519 and verifies them against an external trusted signer key.
+- The model backend supports secured scikit-learn artifacts and structurally validated ONNX models through the same assessment pipeline.
+- The dashboard provides username/password login, role-aware administration, owner-scoped data, production monitoring, reports, and the current Credora assurance-focused visual layout.
 
-For the repeatable Phase 3 command set, see `docs/PHASE3_RUNBOOK.md`.
+For the repeatable release and signing commands, see `docs/PHASE3_RUNBOOK.md` and `docs/PHASE4_RUNBOOK.md`.
 
 ## Multi-User Access and Data Isolation
 
@@ -147,173 +150,63 @@ Keep this distinction explicit in any pitch, paper, or demo. The project is stro
 ```text
 credora/
 |
-|-- README.md
-|-- LICENSE
-|-- .gitignore
-|-- requirements.txt
-|-- docker-compose.yml
-|-- architecture.md
-|-- roadmap.md
-|
-|-- docs/
-|   |-- project_proposal.md
-|   |-- architecture.md
-|   |-- trust_score_methodology.md
-|   |-- trust_drift_timeline.md
-|   |-- scope.md
-|   |-- api_documentation.md
-|   |-- testing_plan.md
-|   |-- diagrams/
-|   |-- research_notes/
-|   |-- model_cards/
-|   `-- reports/
-|
-|-- core/
-|   |-- __init__.py
-|   |-- config.py
-|   |-- db.py
-|   |-- hashing.py
-|   |-- report_schema.py
-|   |-- logging_config.py
-|   `-- model_card.py
-|
-|-- modules/
-|   |
-|   |-- phase1_foundation/
-|   |   |
-|   |   |-- m1_model_verification/
-|   |   |   |-- verifier.py
-|   |   |   |-- models.py
-|   |   |   `-- report.py
-|   |   |
-|   |   |-- m2_dependency_scanner/
-|   |   |   |-- scanner.py
-|   |   |   |-- cve_client.py
-|   |   |   `-- report.py
-|   |   |
-|   |   |-- m8_etc_classifier/
-|   |   |   |-- features/
-|   |   |   |   |-- flow_features.py
-|   |   |   |   `-- tls_features.py
-|   |   |   |-- datasets/
-|   |   |   |   `-- loader.py
-|   |   |   |-- train.py
-|   |   |   |-- model.py
-|   |   |   |-- predict.py
-|   |   |   `-- evaluate.py
-|   |   |
-|   |   |-- m11_trust_score/
-|   |   |   |-- aggregator.py
-|   |   |   |-- weights.py
-|   |   |   `-- report.py
-|   |   |
-|   |   `-- m12_trust_drift_timeline/
-|   |       |-- tracker.py
-|   |       |-- diff.py
-|   |       |-- anomaly.py
-|   |       `-- report.py
-|   |
-|   |-- phase2_intelligence/
-|   |   |
-|   |   |-- m3_ai_vuln_scanner/
-|   |   |   |-- scanner.py
-|   |   |   |-- rules.py
-|   |   |   `-- report.py
-|   |   |
-|   |   |-- m4_adversarial_testing/
-|   |   |   |-- perturbation.py
-|   |   |   |-- extraction_probe.py
-|   |   |   `-- report.py
-|   |   |
-|   |   |-- m9_explainability/
-|   |   |   |-- explainer.py
-|   |   |   `-- narrative.py
-|   |   |
-|   |   |-- m10_threat_intel/
-|   |   |   |-- atlas_mapper.py
-|   |   |   |-- ip_reputation.py
-|   |   |   `-- report.py
-|   |   |
-|   |   `-- m13_ai_toolchain_risk/
-|   |       |-- scanner.py
-|   |       |-- manifest_parser.py
-|   |       |-- permission_analyzer.py
-|   |       |-- risk_rules.py
-|   |       `-- report.py
-|   |
-|   `-- phase3_operations/
-|       |-- m5_secure_deployment/
-|       |   `-- gatekeeper.py
-|       |
-|       |-- m6_runtime_integrity/
-|       |   `-- watcher.py
-|       |
-|       `-- m7_drift_detection/
-|           `-- drift_monitor.py
+|-- README.md, PHASE1_README.md, LICENSE
+|-- requirements.txt, requirements-dev.txt
+|-- Dockerfile, docker-compose.yml
+|-- .github/workflows/phase3-release-gate.yml
 |
 |-- api/
 |   |-- main.py
-|   |-- dependencies.py
 |   `-- routes/
-|       |-- models.py
-|       |-- scan.py
-|       |-- trust_score.py
-|       |-- timeline.py
-|       |-- toolchain_risk.py
-|       |-- reports.py
-|       `-- alerts.py
+|
+|-- core/
+|   |-- auth.py, config.py, db.py, storage.py
+|   |-- hashing.py, security.py
+|   |-- model_backend.py, model_loading.py, model_package.py
+|   |-- report_schema.py, report_signing.py
+|   `-- assessment_insights.py
+|
+|-- modules/
+|   |-- phase1_foundation/
+|   |   |-- m1_model_verification/
+|   |   |-- m2_dependency_scanner/
+|   |   |-- m8_etc_classifier/
+|   |   `-- m11_trust_score/
+|   |-- phase2_deep_trust/
+|   |   |-- m3_robustness_testing/
+|   |   |-- m4_data_drift/
+|   |   |-- m5_explainability/
+|   |   |-- m6_model_risk/
+|   |   |-- m7_trust_drift/
+|   |   |-- m8_behavior_analysis/
+|   |   |-- m9_docx_report/
+|   |   |-- m10_dataset_leakage/
+|   |   `-- m11_privacy_risk/
+|   `-- phase3_operations/
+|       |-- m4_adversarial_validation/
+|       |-- m5_secure_deployment/
+|       |-- m6_runtime_integrity/
+|       |-- m7_flow_ingestion/
+|       `-- m8_production_monitoring/
 |
 |-- dashboard/
-|   |-- app.py
-|   |-- pages/
-|   |   |-- 1_model_registry.py
-|   |   |-- 2_trust_score.py
-|   |   |-- 3_encrypted_traffic_classifier.py
-|   |   |-- 4_alerts_drift.py
-|   |   |-- 5_trust_drift_timeline.py
-|   |   `-- 6_ai_toolchain_risk.py
-|   `-- components/
-|       |-- score_card.py
-|       |-- finding_table.py
-|       |-- metric_cards.py
-|       `-- timeline_chart.py
-|
-|-- signing/
-|   |-- sign_report.py
-|   `-- verify_report.py
+|   |-- app.py, theme.py
+|   |-- components/ (overview, scan submission, top bar, shared controls)
+|   `-- pages/ (authentication, administration, reports, production monitoring)
 |
 |-- data/
-|   |-- raw/
-|   |-- processed/
-|   |-- sample_models/
+|   |-- processed/                 # encrypted-flow train/test CSV files
+|   |-- sample_models/             # joblib and ONNX demo models
 |   |-- sample_requirements/
-|   `-- tool_configs/
+|   |-- phase3_validation/
+|   |-- production_flows/, production_windows/
+|   |-- uploads/                   # user-scoped runtime artifacts
+|   `-- registry/                  # SQLite runtime registry
 |
-|-- reports/
-|   |-- trust_reports/
-|   |-- signed_reports/
-|   `-- model_cards/
-|
-|-- scripts/
-|   |-- train_classifier.py
-|   |-- evaluate_classifier.py
-|   |-- run_full_scan.py
-|   |-- generate_report.py
-|   `-- seed_demo_data.py
-|
-|-- tests/
-|   |-- test_m1_model_verification.py
-|   |-- test_m2_dependency_scanner.py
-|   |-- test_m8_classifier.py
-|   |-- test_m11_trust_score.py
-|   |-- test_m12_trust_drift_timeline.py
-|   |-- test_m13_ai_toolchain_risk.py
-|   `-- fixtures/
-|
-`-- deployment/
-    |-- docker/
-    |-- nginx/
-    `-- production/
+|-- docs/PHASE3_RUNBOOK.md, docs/PHASE4_RUNBOOK.md
+|-- reports/model_cards/, reports/trust_reports/
+|-- scripts/                       # scan, signing, packaging, monitoring, verification
+`-- tests/                         # unit, security, backend, dashboard, and phase tests
 ```
 
 ### A note on data folders
@@ -322,32 +215,35 @@ Data lives in multiple places on purpose because they represent different stages
 
 | Folder | Contains |
 |---|---|
-| `data/raw/` | Original encrypted traffic datasets or uploaded test files |
+| `data/raw/` | Original encrypted traffic datasets or uploaded test files, when used |
 | `data/processed/` | Cleaned flow-feature CSV files used for model training and evaluation |
 | `data/sample_models/` | Demo classifier models such as `traffic_rf_v1.joblib` and `traffic_rf_v1.onnx` |
-| `data/tool_configs/` | Sample MCP/tool/plugin configuration files for toolchain risk scanning |
-| `reports/` | Generated model cards, trust reports, and signed reports |
+| `data/phase3_validation/` | Evasive validation packs for production-gate testing |
+| `data/uploads/` | User-scoped uploaded models, datasets, requirements, metadata, and verified packages |
+| `data/registry/` | SQLite users, models, scans, reports, drift windows, runtime checks, and alerts |
+| `reports/` | Generated model cards, JSON/DOCX trust reports, and verification outputs |
 
 ### A note on Docker
 
 - `docker-compose.yml` in the root is for local development orchestration: API, dashboard, and database.
-- `deployment/docker/` is for later production-style container configuration.
+- `Dockerfile` builds the API/dashboard image used by the local container workflow.
 
 ---
 
 ## 5. Module Responsibility Table
 
-| Module | Input | Output | v1 Priority |
+| Module | Input | Output | Status |
 |---|---|---|---|
-| `model_verification` | Uploaded model file + metadata | Hash/signature/type status + risk findings | High |
-| `dependency_scanner` | `requirements.txt` or lock file | Vulnerability list + dependency risk level | High |
-| `etc_classifier` | Encrypted traffic flow dataset | Predictions, metrics, confusion matrix | High |
-| `trust_score` | Results from core modules | Weighted trust score + deployment status | High |
-| `trust_drift_timeline` | Current and previous model scan records | Version diff + trust drift alerts | High |
-| `explainability` | Trained classifier + feature vectors | Top decision features + explanation text | Medium |
-| `ai_vuln_scanner` | Model/project files/configs | AI-specific vulnerability findings | Medium |
-| `ai_toolchain_risk` | MCP/tool/plugin config files | Permission risk findings + recommendations | Medium |
-| `report_generator` | Final scan results | Model card, trust report, signed report | Medium |
+| `m1_model_verification` | Uploaded model + metadata | Hash, signature, format, and artifact-risk findings | Implemented |
+| `m2_dependency_scanner` | Requirements file | Package vulnerability findings and dependency risk | Implemented |
+| `m8_etc_classifier` | Encrypted flow metadata | Predictions, metrics, and confusion matrix | Implemented |
+| `m11_trust_score` | Assessment results | Weighted trust score and deployment status | Implemented |
+| `phase2_deep_trust` | Model, train/test data, and scan history | Robustness, drift, explainability, leakage, privacy, behavior, and report evidence | Implemented |
+| `phase3_operations` | Release artifacts and captured flow data | Adversarial validation, deployment gate, runtime integrity, ingestion, and production drift | Implemented |
+| `core.report_signing` | Final JSON report + trusted key | Ed25519 signature and independent verification result | Implemented |
+| `core.auth` and `core.db` | Users, roles, uploads, and scan records | Owner-scoped multi-user registry and audit data | Implemented |
+| `dashboard` and `api` | Authenticated scan inputs and registry data | Web dashboard, reports, admin controls, and API access | Implemented |
+| `Phase 15 plan` | Future governance requirements | Planned extensions only; no implementation yet | Planned |
 
 ---
 
@@ -373,7 +269,7 @@ The encrypted traffic classifier should use metadata only. The system does **not
 | **1** | Model verification, dependency scanner, encrypted traffic classifier evaluation, trust score | A full scan produces model status, dependency findings, classifier metrics, and a trust score |
 | **2** | Trust Drift Timeline and dashboard views | Two model versions can be compared and the result is visible in the dashboard |
 | **3** | Explainability, AI vulnerability scanner, AI toolchain risk scanner, report generation | The dashboard explains risks and generates a model card/trust report |
-| **4** | Signed reports and optional deployment checks | Reports can be signed and verified; lightweight deployment-readiness checks are available |
+| **4** | Signed final reports, trusted signer verification, multi-user access, ONNX support, and optional deployment checks | Reports can be signed and independently verified; authenticated users can run and review owner-scoped assessments |
 
 This is a solo project, so the build order matters. The first complete version should focus on the foundation: model verification, dependency scanning, encrypted traffic classifier evaluation, trust score, and trust drift timeline. Later features should be added only after the core workflow is working end to end.
 
@@ -440,7 +336,7 @@ Baseline result for the current sample classifier:
 |---|---:|
 | Rows evaluated | 225 |
 | Feature count | 8 |
-| Accuracy | 1.0 |
+| Observed evaluation accuracy | 0.94 |
 | Weighted F1 | 1.0 |
 | Macro F1 | 1.0 |
 
@@ -523,6 +419,26 @@ The test suite verifies Phase 1 security controls, Phase 2 truthfulness checks, 
 ```
 
 Raw `.joblib` release-gate runs are allowed for diagnostics but are capped at `70/100`; signed `.credora` packages are the release path. The command exits with code `0` only when the trust threshold and deployment decision pass. Add `--require-approved` when conditional releases must also fail CI.
+
+### Sign and verify a final trust report (Phase 4)
+
+Generate a report-signing key pair once, sign a completed JSON trust report, and verify it independently:
+
+```powershell
+& ".venv\Scripts\python.exe" scripts\generate_report_signing_keys.py `
+  --private-key data\signing_keys\report-private.pem `
+  --public-key data\signing_keys\report-public.pem
+
+& ".venv\Scripts\python.exe" scripts\sign_trust_report.py `
+  --report reports\trust_reports\traffic_rf_v1_phase3_trust_report.json `
+  --private-key data\signing_keys\report-private.pem
+
+& ".venv\Scripts\python.exe" scripts\verify_trust_report.py `
+  --report reports\trust_reports\traffic_rf_v1_phase3_trust_report.json `
+  --public-key data\signing_keys\report-public.pem
+```
+
+Keep report private keys outside source control. The verification command checks the report signature and the trusted signer identity; report signing is separate from signed model-package verification.
 
 ### Monitor runtime model integrity
 
@@ -635,6 +551,11 @@ This recreates the demo Random Forest classifier and sample encrypted-flow datas
 | Purpose | File |
 |---|---|
 | Streamlit dashboard | `dashboard/app.py` |
+| Dashboard theme and overview | `dashboard/theme.py`, `dashboard/components/overview.py` |
+| Dashboard authentication | `dashboard/pages/auth.py`, `core/auth.py` |
+| Dashboard administration | `dashboard/pages/admin.py` |
+| Reports and production monitoring pages | `dashboard/pages/reports.py`, `dashboard/pages/production_monitoring.py` |
+| API and access control | `api/main.py`, `core/auth.py`, `core/db.py` |
 | Full scan runner | `scripts/run_phase1_scan.py` |
 | Demo data/model generator | `scripts/seed_demo_data.py` |
 | Independent classifier verifier | `scripts/verify_model_independent.py` |
@@ -647,11 +568,14 @@ This recreates the demo Random Forest classifier and sample encrypted-flow datas
 | Zeek/CICFlowMeter collector | `modules/phase3_operations/m7_flow_ingestion/collector.py` |
 | Rolling production monitor | `modules/phase3_operations/m8_production_monitoring/monitor.py` |
 | Signed model package | `core/model_package.py` |
+| Model backend and ONNX support | `core/model_backend.py`, `scripts/build_test_onnx_model.py` |
 | Phase 3 release gate | `scripts/phase3_release_gate.py` |
+| Phase 4 report signing | `core/report_signing.py`, `scripts/sign_trust_report.py`, `scripts/verify_trust_report.py` |
 | Container deployment | `Dockerfile`, `docker-compose.yml` |
 | CI release gate | `.github/workflows/phase3-release-gate.yml` |
 | Evasive validation pack generator | `scripts/create_phase3_validation_pack.py` |
 | Automated Phase 3 tests | `tests/test_phase3_*.py` |
+| Authentication, backend, ONNX, dashboard, and report-signing tests | `tests/test_auth.py`, `tests/test_model_backend.py`, `tests/test_onnx_backend.py`, `tests/test_dashboard_structure.py`, `tests/test_phase4_report_signing.py` |
 | Sample classifier model | `data/sample_models/traffic_rf_v1.joblib` |
 | Test dataset | `data/processed/encrypted_traffic_test.csv` |
 | Metadata | `data/metadata/traffic_rf_v1_metadata.json` |
@@ -671,18 +595,21 @@ When a model scan starts, Credora now reports assessment progress by level:
 | Level 0 | Intake | Reads metadata and prepares scan inputs |
 | Level 1 | Integrity | Checks model format, SHA-256 hash, signature metadata, and artifact size |
 | Level 2 | Supply Chain | Reviews dependency/package risk |
-| Level 3 | Classifier Performance | Runs predictions and calculates accuracy, precision, recall, F1, and confusion matrix |
+| Level 3 | Classifier Performance | Runs predictions and calculates observed evaluation accuracy, precision, recall, F1, and confusion matrix |
 | Level 4 | Robustness | Perturbs flow features and checks prediction stability |
 | Level 5 | Data Drift | Compares current traffic features against baseline training data |
 | Level 6 | Explainability | Finds which flow features drive decisions |
-| Level 7 | Behavior Analysis | Checks confidence, weak classes, suspicious-class recall, class confusion, and feature reliance |
-| Level 8 | Model Risk | Reviews unsafe serialization, metadata completeness, and deployment risk |
-| Level 9 | Adversarial Validation | Runs timing jitter, sensitive-flow evasion, and sensor feature-dropout scenarios |
-| Level 10 | Runtime Integrity | Verifies the deployed artifact hash and signature baseline |
-| Level 11 | Trust Scoring | Combines validation evidence into a preliminary production score |
-| Level 12 | Deployment Gate | Applies mandatory trust, classifier, adversarial, integrity, and sensitive-recall thresholds |
-| Level 13 | Trust Drift | Compares trust score against previous scans |
-| Level 14 | Final Report | Writes the deployment decision, tailored fixes, JSON report, and DOCX report |
+| Level 7 | Leakage and Generalization | Checks holdout overlap and train/test performance gaps |
+| Level 8 | Privacy Risk | Estimates memorization and membership-inference risk |
+| Level 9 | Behavior Analysis | Checks confidence, weak classes, suspicious-class recall, class confusion, and feature reliance |
+| Level 10 | Model Risk | Reviews unsafe serialization, metadata completeness, and deployment risk |
+| Level 11 | Adversarial Validation | Runs timing jitter, sensitive-flow evasion, and sensor feature-dropout scenarios |
+| Level 12 | Runtime Integrity | Verifies the deployed artifact hash and signature baseline |
+| Level 13 | Security Gate | Applies non-negotiable signature, integrity, dependency, model-risk, adversarial, and sensitive-recall checks |
+| Level 14 | Trust Scoring | Only after the Security Gate passes, combines performance, robustness, drift, dependency, privacy, and explainability evidence |
+| Level 15 | Trust Drift | Compares an issued Trust Score against previous scans |
+| Level 16 | Deployment Gate | Applies release policy after both the Security Gate and Trust Score are available |
+| Level 17 | Threat Model and Final Report | Maps measured controls to threats and writes the deployment decision, tailored fixes, JSON report, and DOCX report |
 
 Every new report also stores a persistent `analysis_trace`. Each trace record explains the method used, exact measured evidence, module conclusion, score, status, and detected issue names. The dashboard shows these records under **Traffic Classifier -> Deep Assessment Trace**, so the reasoning remains visible after the live progress display finishes.
 
@@ -694,7 +621,11 @@ Corrective actions are generated from the current report evidence, not selected 
 
 Phase 3 is complete for the project scope. The scanner now covers pre-deployment assessment and post-deployment operational monitoring.
 
-Unsigned `.joblib`, `.pkl`, and `.onnx` assessments are intentionally capped at `70/100` until a signed package is verified. The signed `.credora` packaging workflow is the production-style path used by CI and release automation; it verifies an external Ed25519 signature, checks artifact hashes, and then runs the release gate with the trusted package evidence.
+Unsigned `.joblib`, `.pkl`, and `.onnx` assessments fail the Security Gate and do not receive a Trust Score. The signed `.credora` packaging workflow is the production-style path used by CI and release automation; it verifies an external Ed25519 signature, checks artifact hashes, and then permits Trust Score calculation only when every other critical gate also passes. A high weighted score can never override a failed critical check.
+
+Classifier metrics are observations from the uploaded evaluation dataset. Even when observed evaluation accuracy is `1.0`, Credora does not present that result as guaranteed production accuracy; robustness, adversarial safety, drift, leakage, privacy, runtime integrity, and the Security Gate remain separate evidence.
+
+Each generated report includes a threat model covering protected assets, threat actors, attack surfaces, trust boundaries, threat scenarios, control mappings, security assumptions, out-of-scope threats, and residual risk. Threat status is derived from the existing scan evidence rather than from a second synthetic assessment.
 
 The real-model evasive validation profile scores `62.03/100` and is **blocked**. It produces `0.0` recall for `Suspicious`, confuses all 75 suspicious flows as `VPN`, detects high drift across all eight model features, and fails five production gate checks. This proves the scanner produces materially different evidence and fixes when model behavior becomes unsafe.
 
@@ -730,6 +661,229 @@ flow_bytes_per_second
 ```
 
 Those feature rows can then be passed into the trained classifier for live predictions.
+
+---
+
+## 16. Planned Work (Not Implemented): Phase 15
+
+### Sequence-based deep learning support
+
+**Status: Planned only. This phase is not implemented in the current codebase.**
+
+Phase 15 adds ONNX-exported models that take raw packet-byte or token sequences (1D-CNN, LSTM, or small transformers) instead of flat tabular columns. It assumes the work from items 1-14 is complete, especially:
+
+- item 14.1, the `ModelBackend` abstraction, which this plan extends;
+- item 5, the stage-aware expected-module sets, which this plan makes input-type-aware;
+- item 6, multi-trial perturbation, which the byte-level attacks reuse; and
+- item 7, the single sensitive-label taxonomy, which the sequence adversarial module reads.
+
+This is a substantial second project on top of the tabular workflow. Items 15.3, 15.6, 15.7, and 15.8 are each significant sub-projects. A reduced scope is listed at the end.
+
+The ONNX-only policy makes two changes to the earlier deep-learning plan:
+
+- Captum and Integrated Gradients require a live PyTorch model. Since uploads are ONNX-only, sequence explainability uses occlusion instead (15.7).
+- Expected-module sets must vary by input type, or sequence scans would be penalized for modules that do not apply (15.11).
+
+The expected runtime dependency remains the ONNX stack from item 14: `onnxruntime` and `onnx`. `dpkt` is needed only if raw pcaps are accepted (15.3). `torch` belongs in `requirements-dev.txt` only, for building the test fixture.
+
+### 15.1 Fix ONNX safety checks first
+
+**Files:** `core/config.py` near `verify_model_file_type`, or a new `core/onnx_safety.py`
+
+`onnx.checker.check_model()` validates structure, not safety. Before creating any `InferenceSession`, reject these attack surfaces:
+
+- external tensor data, because an initializer can point to a file path through `location` and cause a path-traversal read;
+- custom operator domains outside the standard allowed sets; and
+- custom opset domains outside the standard allowed sets.
+
+The safety validator must load with `load_external_data=False`, reject external initializers, and allow only the empty domain, `ai.onnx`, and `ai.onnx.ml`. Call it from the existing `OnnxBackend` and the future sequence backend. Back-port the same check to the tabular ONNX path from item 14.6.
+
+### 15.2 Define the sequence input contract
+
+**Files:** metadata schema, `scripts/run_phase1_scan.py`, and `api/main.py`
+
+Require these metadata fields when `input_type == "sequence"`:
+
+- `input_type`: `"tabular"` by default, or `"sequence"`;
+- `max_sequence_length`: integer matching the ONNX input shape;
+- `class_labels`: ordered list mapping output indexes to labels;
+- `sequence_dtype`: `"int64"` for token or byte ids, or `"float32"` for normalized bytes; and
+- `vocab_size`: integer used to validate that no id exceeds the vocabulary.
+
+Validate the ONNX graph input shape and dtype against the metadata at load time. Fail clearly on mismatch and never coerce silently.
+
+### 15.3 Build the dataset loader, `.npz` first and pcap second
+
+**New file:** `core/sequence_data.py`
+
+The primary path is a pre-tokenized `.npz` containing `X` with shape `n x max_sequence_length` and `y` labels:
+
+```python
+data = np.load(path, allow_pickle=False)
+X, y = data["X"], data["y"]
+```
+
+`allow_pickle=False` is mandatory because enabling pickling creates the same remote-code-execution class that the existing upload controls are designed to prevent. Add a test that a pickled-object `.npz` is rejected.
+
+Validate dtype, NaN absence, vocabulary bounds, `len(X) == len(y)`, a row cap such as 200,000 rows, and a file-size cap.
+
+The secondary raw `.pcap` path is optional and should be attempted only if time allows:
+
+- parse with `dpkt` in an isolated subprocess with a timeout, reusing the preflight pattern from `core/model_loading.py`;
+- cap packets per file and bytes per packet because pcap parsers are a denial-of-service surface;
+- mask or strip Ethernet and IP headers so addresses do not become model features;
+- truncate and pad each packet to `max_sequence_length`;
+- read labels from a companion CSV because pcaps do not contain labels; and
+- store uploads under `resolve_user_data_path`, then delete raw pcaps after tokenization because they may contain payloads and addresses.
+
+The recommended first release is `.npz`-only. It is the safer path and covers the complete testable workflow.
+
+### 15.4 Extend the backend abstraction
+
+**File:** `core/model_backend.py`
+
+Add `SequenceOnnxBackend(ModelBackend)` with the same `predict` and `predict_proba` interface, but accept a NumPy array instead of a DataFrame.
+
+- Apply the 15.1 safety validation in the constructor.
+- Use batched inference, for example 256 rows per batch, to bound memory.
+- Apply softmax to raw logits when necessary so `predict_proba` always returns a probability matrix. Detect this from row sums.
+- Return `None` from `feature_importance()`, as the tabular ONNX backend does.
+
+Update `load_model_backend(path, metadata)` to select this backend when `input_type == "sequence"`, and update its call sites to pass metadata.
+
+### 15.5 Branch classifier evaluation by input type
+
+**File:** `modules/phase1_foundation/m8_etc_classifier/evaluate.py`
+
+For sequence metadata, load data through `core/sequence_data.py`; otherwise keep the existing CSV path. Preserve the existing output contract: accuracy, precision, recall, F1, confusion matrix, weak classes, and confusion pairs. The trust aggregator and report schema should not need to know which input path produced the metrics.
+
+Apply the same branch in `modules/phase2_deep_trust/m8_behavior_analysis/behavior.py`, since confidence statistics and per-class weakness require only `predict` and `predict_proba`.
+
+### 15.6 Add sequence robustness and adversarial scenarios
+
+**New file:** `modules/phase3_operations/m4_adversarial_validation/sequence_adversarial.py`
+
+Call the sequence module from `adversarial.py` and `robustness.py` when `input_type == "sequence"`. Tabular perturbations do not transfer to sequences. Add:
+
+- random byte noise, replacing a small percentage of positions with random ids;
+- truncation, zeroing the tail after position `k`;
+- padding injection at random offsets;
+- position shift or block reordering to simulate segmentation differences; and
+- packet dropping for sequences representing several packets.
+
+Reuse the multi-trial loop from item 6 and score the worst-case percentile. Use `get_sensitive_label_taxonomy()` from item 7 for sensitive-class recall. Keep the scoring logic unchanged and state clearly in findings that these are semantic-agnostic perturbations that do not guarantee a valid packet.
+
+### 15.7 Replace feature explainability with occlusion saliency
+
+**File:** `modules/phase2_deep_trust/m5_explainability/explain.py`
+
+For sequence models, skip SHAP and `feature_importances_`. Use sliding-window occlusion with `predict_proba`:
+
+1. Select representative flows, for example 20 samples stratified by class.
+2. For each window position, use a window of 8-16 tokens and replace it with the pad id.
+3. Define saliency as the drop in the originally predicted class probability.
+4. Aggregate a per-position mean saliency curve for each class.
+
+The output changes to records such as `{"class", "position_start", "position_end", "saliency"}` instead of `{"feature", "importance"}`. Document the difference in the report. Add a finding when saliency concentrates in the first few positions, which can indicate shortcut learning from header bytes rather than payload behavior.
+
+### 15.8 Adapt drift detection to sequence aggregates
+
+**File:** `modules/phase2_deep_trust/m4_data_drift/drift.py`
+
+Because sequences do not have ordinary per-column distributions, compute these aggregates for each sequence:
+
+- non-pad length;
+- byte or token entropy;
+- fraction of zero or pad ids; and
+- a coarse token-id histogram, such as 16 bins.
+
+Run the existing PSI function on each aggregate against a training `.npz` baseline in the same format. Report which aggregate drifted. Embedding-space MMD remains a stretch goal and is not part of this phase.
+
+### 15.9 Adapt leakage and privacy modules
+
+**Files:** `modules/phase2_deep_trust/m10_dataset_leakage/leakage.py` and `modules/phase2_deep_trust/m11_privacy_risk/privacy.py`
+
+- For leakage, hash each sequence row with `hashlib.sha256(row.tobytes())` and compare train and test sets, following the tabular row-hash approach.
+- For privacy risk, reuse the train-versus-holdout confidence comparison through `predict_proba`; only the sequence data loader needs to change.
+
+### 15.10 Mark modules that do not apply to ONNX
+
+**Files:** `scripts/run_phase1_scan.py`, `modules/phase1_foundation/m2_dependency_scanner/scanner.py`, and `modules/phase2_deep_trust/m6_model_risk/risk.py`
+
+- Dependency scanning audits a `requirements.txt`. ONNX models do not ship one, so a missing requirements file must not be reported as a defect for an ONNX scan.
+- Add a `not_applicable` status to `ModuleResult`, distinct from missing or failed.
+- Do not raise pickle or joblib findings for ONNX. Surface ONNX-specific facts instead, including opset version, graph node count, input shape, and output shape.
+
+### 15.11 Make expected-module sets input-type-aware
+
+**File:** `modules/phase1_foundation/m11_trust_score/aggregator.py`
+
+Item 5 defines fixed preliminary and final expected sets. Build the expected set per scan by removing modules marked `not_applicable` for that input type, and renormalize weights over applicable modules only.
+
+Regression tests must confirm that:
+
+- a complete sequence scan scores the same as an equivalent complete tabular scan, with no accidental penalty; and
+- a sequence scan that genuinely lacks an applicable module is still penalized.
+
+### 15.12 Add resource and safety limits
+
+**Files:** `core/config.py`, `api/main.py`, and `scripts/run_phase1_scan.py`
+
+- Keep the existing tabular cap and add configurable sequence model and dataset caps, for example 100 MB by default and up to approximately 500 MB for ET-BERT-scale exports.
+- Add per-module timeouts with a clear `timed out` finding. Cap sampled flows and trials because occlusion multiplies inference cost.
+- Run `InferenceSession` creation and inference in an isolated subprocess with a timeout, matching item 1. ONNX Runtime is native code parsing an untrusted graph, so 15.1 reduces but does not eliminate the risk.
+- Use CPU-only execution. GPU handling is outside this phase.
+
+### 15.13 Update report, dashboard, and admin surfaces
+
+**Files:** `core/report_schema.py`, `dashboard/app.py` or its page files, and admin endpoints
+
+- Add top-level `input_type` and a `saliency` section to the report. Report signing remains unaffected because the new fields are inside the signed JSON.
+- Add an input-type selector to the upload form. When sequence is selected, reveal the metadata fields from 15.2 and accept `.npz` files.
+- Add a simple saliency view, such as a bar or line plot by position and class, rather than a full heatmap.
+- Deployment-policy thresholds are global today. The simplest policy is to share them with sequence models and document that decision.
+
+### 15.14 Build test models and fixtures
+
+**New script:** `scripts/build_test_sequence_model.py` (development-only `torch` dependency)
+
+Generate synthetic sequences with class-specific byte motifs at varied offsets and noise. Use 4-5 classes, length 128, and a few thousand rows. Train a small 1D-CNN in PyTorch, export it to ONNX with opset 15 or lower and no external data, and save:
+
+- `seq_demo_strong.onnx`;
+- `seq_demo_test.npz`;
+- `seq_demo_train.npz`; and
+- `metadata.json`.
+
+Also build a deliberately weak variant, such as one trained for too few epochs or with heavy class imbalance, to confirm that the score discriminates. Commit the small ONNX and `.npz` fixtures so CI does not need `torch`; regeneration remains a manual development step. Never run ET-BERT-scale models in CI.
+
+### 15.15 Add tests
+
+**New files:** `tests/test_sequence_backend.py`, `tests/test_onnx_safety.py`, and `tests/test_sequence_data.py`
+
+Tests must cover:
+
+- rejection of external-data initializers and custom ONNX domains, plus acceptance of a valid model;
+- rejection of pickled-object `.npz` files, out-of-vocabulary ids, and length mismatches;
+- fixture predictions, probability sums, and loud failure for metadata shape or dtype mismatches;
+- a full scan producing a real trust score without raising;
+- a weak fixture scoring below the strong fixture;
+- the 15.11 scoring regressions; and
+- occlusion saliency peaking near a known discriminating motif position.
+
+### 15.16 Update documentation and copy
+
+**Files:** README and the login-page panel
+
+- Split supported models into tabular and sequence tracks.
+- State which modules apply to each track and explain that sequence reports use saliency instead of feature importance.
+- Document that raw `.pt`, `.pth`, and TensorFlow checkpoints remain unsupported by design and explain why.
+- Update the login-page format line only after sequence support actually ships.
+
+### Suggested reduced scope
+
+If time is limited, implement 15.1, 15.2, 15.3 with `.npz` only, 15.4, 15.5, 15.10, 15.11, 15.12, 15.14, and 15.15. This provides end-to-end ONNX sequence evaluation with real metrics, a correct trust score, and safety checks. Mark robustness (15.6), saliency (15.7), and sequence drift (15.8) as not yet supported for sequence models rather than partially implementing them. Add those later in the order 15.6, 15.8, 15.7, because 15.7 is the largest task.
+
+**Full-scope completion criterion:** upload a small ONNX-exported 1D-CNN with `input_type: "sequence"` and a tokenized `.npz` dataset, then produce a signed trust report with real accuracy metrics, byte-level evasion results, sequence-aggregate drift, and position-level saliency. A malicious ONNX file or malicious `.npz` must not execute code or read files outside the intended directories.
 
 
 

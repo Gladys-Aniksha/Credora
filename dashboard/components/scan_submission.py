@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import streamlit as st
 
@@ -32,8 +32,15 @@ def persist_upload(uploaded: object, subdir: str, project_root: Path) -> Path | 
     return path
 
 
-def render_scan_submission(project_root: Path) -> ScanSubmission:
-    with st.expander("Upload & Analyze Model", expanded=False, icon=":material/upload_file:"):
+def render_scan_submission(project_root: Path, *, standalone: bool = False) -> ScanSubmission:
+    panel = st.container(border=True) if standalone else st.expander(
+        "Upload & Analyze Model",
+        expanded=False,
+        icon=":material/upload_file:",
+    )
+    with panel:
+        if standalone:
+            st.markdown("### Upload assessment evidence")
         st.caption("Upload a trained classifier and its labeled evaluation evidence.")
         mode = st.radio(
             "Assessment source",

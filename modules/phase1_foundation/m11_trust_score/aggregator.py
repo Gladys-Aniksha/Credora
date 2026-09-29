@@ -16,12 +16,11 @@ WEIGHTS = {
     "model_risk_analyzer": 0.05,
     "adversarial_validation": 0.09,
     "runtime_integrity": 0.06,
-    "deployment_gate": 0.05,
     "trust_drift_timeline": 0.02,
 }
 FINAL_EXPECTED_MODULES = tuple(WEIGHTS)
 PRE_DEPLOYMENT_EXPECTED_MODULES = tuple(
-    module for module in FINAL_EXPECTED_MODULES if module not in {"deployment_gate", "trust_drift_timeline"}
+    module for module in FINAL_EXPECTED_MODULES if module != "trust_drift_timeline"
 )
 
 
@@ -51,26 +50,15 @@ def calculate_trust_score(
     normalized_score = weighted_score / total_weight if total_weight else 0.0
     module_coverage = len(scored_modules) / len(expected_modules) if expected_modules else 0.0
     final_score = normalized_score * module_coverage
-    deployment_gate = by_module.get("deployment_gate")
-    gate_decision = deployment_gate.details.get("decision") if deployment_gate else None
-    if gate_decision == "blocked":
-        status = "fail"
-        summary = "Blocked by the Phase 3 production deployment gate."
-    elif gate_decision == "conditional":
-        status = "warning"
-        summary = "Conditionally approved for production after listed controls are resolved."
-    elif gate_decision == "approved" and final_score >= 85:
+    if final_score >= 85:
         status = "pass"
-        summary = "Approved by the Phase 3 production deployment gate."
-    elif final_score >= 85:
-        status = "pass"
-        summary = "Trusted for validation; run the production deployment gate before release."
+        summary = "High overall assurance based on the completed non-gate assessment modules."
     elif final_score >= 70:
         status = "warning"
-        summary = "Mostly trusted, but review warnings before deployment."
+        summary = "Moderate overall assurance; review warnings before deployment approval."
     else:
         status = "fail"
-        summary = "Not recommended for deployment until major issues are fixed."
+        summary = "Low overall assurance; major assessment issues require remediation."
 
     critical_or_high = [finding for result in by_module.values() for finding in result.findings if finding.severity in {"critical", "high"}]
     if critical_or_high:
@@ -88,7 +76,37 @@ def calculate_trust_score(
             "modules_scored": scored_modules,
             "missing_modules": missing_modules,
             "module_coverage": round(module_coverage, 4),
-            "deployment_decision": gate_decision,
+            "issued": True,
+        },
+    )
+
+
+def trust_score_not_issued(security_gate: ModuleResult) -> ModuleResult:
+    """Represent a blocked score without presenting zero as an assurance measurement."""
+    failed_checks = list(security_gate.details.get("failed_checks", []))
+    return ModuleResult(
+        module="trust_score",
+        status="not_run",
+        score=0.0,
+        summary="Trust Score was not issued because the Security Gate failed.",
+        findings=[
+            Finding(
+                "trust_score",
+                "Trust Score not issued",
+                "critical",
+                "Mandatory security evidence failed before weighted assurance scoring.",
+                "Resolve the failed Security Gate checks and rerun the assessment.",
+            )
+        ],
+        details={
+            "issued": False,
+            "blocked_by": "security_gate",
+            "failed_security_checks": failed_checks,
+            "weights": {},
+            "expected_modules": [],
+            "modules_scored": [],
+            "missing_modules": [],
+            "module_coverage": 0.0,
         },
     )
 

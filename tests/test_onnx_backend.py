@@ -65,11 +65,14 @@ def test_full_scan_chain_produces_onnx_trust_report(tmp_path) -> None:
     )
 
     results = {result.module: result for result in report.module_results}
-    assert report.trust_score > 0
+    assert report.trust_score == 0
     assert results["classifier_evaluation"].details["f1_score"] >= 0.99
     assert results["robustness_testing"].details["trial_count"] == 25
     assert results["adversarial_validation"].details["trial_count"] == 25
-    assert results["trust_score"].score == report.trust_score
+    assert results["security_gate"].details["decision"] == "blocked"
+    assert results["trust_score"].details["issued"] is False
+    assert results["deployment_gate"].details["decision"] == "blocked"
+    assert report.threat_model["summary"]["threats_identified"] == 15
 
 
 def test_full_scan_chain_still_produces_sklearn_trust_report(monkeypatch, tmp_path) -> None:
@@ -83,11 +86,14 @@ def test_full_scan_chain_still_produces_sklearn_trust_report(monkeypatch, tmp_pa
     )
 
     results = {result.module: result for result in report.module_results}
-    assert report.trust_score > 0
+    assert report.trust_score == 0
     assert results["classifier_evaluation"].details["f1_score"] >= 0.99
     assert results["robustness_testing"].details["trial_count"] == 25
     assert results["adversarial_validation"].details["trial_count"] == 25
-    assert results["trust_score"].score == report.trust_score
+    assert results["security_gate"].details["decision"] == "blocked"
+    assert results["trust_score"].details["issued"] is False
+    assert results["deployment_gate"].details["decision"] == "blocked"
+    assert report.threat_model["summary"]["threats_identified"] == 15
 
 
 def test_renamed_non_onnx_file_is_rejected(tmp_path) -> None:

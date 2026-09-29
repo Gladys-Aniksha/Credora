@@ -69,10 +69,15 @@ def _navigate(page: str) -> None:
 def _sparkline(values: list[float], color: str) -> str:
     clean = [max(0.0, min(float(value), 100.0)) for value in values if value is not None]
     if not clean:
-        clean = [50.0, 50.0]
-    if len(clean) == 1:
-        clean = [clean[0], clean[0]]
+        return ""
     width, height = 260, 48
+    if len(clean) == 1:
+        y = height - (clean[0] / 100 * 36) - 4
+        return (
+            f'<svg class="metric-spark" viewBox="0 0 {width} {height}" preserveAspectRatio="none" aria-hidden="true">'
+            f'<line x1="112" y1="{y:.1f}" x2="148" y2="{y:.1f}" stroke="{color}" stroke-width="1.2" opacity=".38"/>'
+            f'<circle cx="130" cy="{y:.1f}" r="2.8" fill="{color}"/></svg>'
+        )
     step = width / (len(clean) - 1)
     points = " ".join(f"{idx * step:.1f},{height - (value / 100 * 36) - 4:.1f}" for idx, value in enumerate(clean))
     area = f"0,{height} {points} {width},{height}"
@@ -82,6 +87,61 @@ def _sparkline(values: list[float], color: str) -> str:
         f'<stop offset="0" stop-color="{color}" stop-opacity=".2"/><stop offset="1" stop-color="{color}" stop-opacity="0"/>'
         f'</linearGradient></defs><polygon points="{area}" fill="url(#spark-{color[1:]})"/>'
         f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>'
+    )
+
+
+def _metric_series(values: list[float], current: float) -> list[float]:
+    clean = [max(0.0, min(float(value), 100.0)) for value in values if value is not None]
+    series = clean[-12:]
+    if not series or abs(series[-1] - current) > 0.01:
+        series.append(max(0.0, min(float(current), 100.0)))
+    return series
+
+
+def _module_score(report: dict[str, Any], module_name: str) -> float | None:
+    for result in report.get("module_results", []):
+        if result.get("module") == module_name and result.get("score") is not None:
+            return max(0.0, min(float(result["score"]), 100.0))
+    return None
+
+
+def build_metric_histories(
+    reports: list[dict[str, Any]],
+    current_report: dict[str, Any],
+) -> tuple[list[float], list[float], list[float]]:
+    ordered = sorted(reports, key=lambda report: str(report.get("generated_at") or ""))
+    trust_history = [float(report["trust_score"]) for report in ordered if report.get("trust_score") is not None]
+    integrity_history = [
+        score for report in ordered if (score := _module_score(report, "model_verification")) is not None
+    ]
+    dependency_risk_history = [
+        100.0 - score for report in ordered if (score := _module_score(report, "dependency_scanner")) is not None
+    ]
+
+    current_trust = float(current_report.get("trust_score") or 0.0)
+    current_integrity = _module_score(current_report, "model_verification") or 0.0
+    current_dependency_score = _module_score(current_report, "dependency_scanner") or 0.0
+
+    if len(trust_history) < 2:
+        component_scores = [
+            score
+            for result in current_report.get("module_results", [])
+            if result.get("module") != "trust_score"
+            and result.get("score") is not None
+            and (score := max(0.0, min(float(result["score"]), 100.0))) is not None
+        ]
+        trust_history = component_scores + [current_trust]
+    if len(integrity_history) < 2:
+        integrity_history = [
+            score
+            for module_name in ("model_verification", "runtime_integrity")
+            if (score := _module_score(current_report, module_name)) is not None
+        ]
+
+    return (
+        _metric_series(trust_history, current_trust),
+        _metric_series(integrity_history, current_integrity),
+        _metric_series(dependency_risk_history, 100.0 - current_dependency_score),
     )
 
 
@@ -115,12 +175,21 @@ def render_readiness_banner(
     trust_score: float,
     critical_count: int,
     integrity_score: float,
+    security_gate_passed: bool,
+    trust_score_issued: bool,
 ) -> None:
     blocked = decision == "blocked"
     checklist = [
-        (not blocked, "Security assessment passed" if not blocked else "Security assessment requires review"),
+        (security_gate_passed, "Security Gate passed" if security_gate_passed else "Security Gate blocked deployment"),
         (critical_count == 0, "No critical risks detected" if critical_count == 0 else f"{critical_count} critical risk(s) detected"),
-        (trust_score >= 70, "Trust score above threshold" if trust_score >= 70 else "Trust score below threshold"),
+        (
+            trust_score_issued and trust_score >= 70,
+            "Trust score above threshold"
+            if trust_score_issued and trust_score >= 70
+            else "Trust score not issued"
+            if not trust_score_issued
+            else "Trust score below threshold",
+        ),
         (integrity_score >= 70, "Model integrity verified" if integrity_score >= 70 else "Model integrity needs review"),
     ]
     checks = "".join(
@@ -150,22 +219,27 @@ def render_metric_cards(
     integrity_score: float,
     dependency_risk: float,
     dep_count: int,
-    score_history: list[float],
+    metric_histories: tuple[list[float], list[float], list[float]],
+    trust_score_issued: bool,
 ) -> None:
-    tier, tier_name = _tier(trust_score)
+    tier, tier_name = _tier(trust_score) if trust_score_issued else ("–", "Security Gate blocked")
     trust_note = "High trust" if trust_score >= 85 else "Review recommended" if trust_score >= 70 else "High risk"
+    trust_value = f"{trust_score:.0f}<small>/ 100</small>" if trust_score_issued else "Not issued"
+    trust_detail = (
+        f"{h(trust_note)}<br>{'Ready for production' if trust_score >= 85 else 'Policy review required'}"
+        if trust_score_issued
+        else "A critical security check failed"
+    )
     integrity_note = "No integrity issues detected" if integrity_score >= 85 else "Integrity evidence requires review"
     dep_note = "All dependencies verified" if dep_count == 0 else f"{dep_count} actionable finding(s)"
-    trust_values = list(reversed(score_history[-12:])) or [trust_score]
-    integrity_values = [max(0, value + integrity_score - trust_score) for value in trust_values]
-    dependency_values = [max(0, min(100, dependency_risk + (trust_score - value) * .4)) for value in trust_values]
+    trust_values, integrity_values, dependency_values = metric_histories
     st.markdown(
         f"""
         <section class="overview-metrics">
           <article class="overview-metric">
             <div class="metric-label">Trust Score <span>{_icon('info')}</span></div>
-            <div class="metric-core"><i class="metric-round red">{_icon('shield')}</i><div><strong>{trust_score:.0f}<small>/ 100</small></strong><p>{h(trust_note)}<br>{'Ready for production' if trust_score >= 85 else 'Policy review required'}</p></div></div>
-            {_sparkline(trust_values, '#AD3438')}
+            <div class="metric-core"><i class="metric-round red">{_icon('shield')}</i><div><strong>{trust_value}</strong><p>{trust_detail}</p></div></div>
+            {_sparkline(trust_values, '#AD3438') if trust_score_issued else ''}
           </article>
           <article class="overview-metric">
             <div class="metric-label">Model Integrity <span>{_icon('info')}</span></div>
@@ -180,7 +254,7 @@ def render_metric_cards(
           <article class="overview-metric tier-card">
             <div class="metric-label">Model Assurance Tier <span>{_icon('info')}</span></div>
             <div class="tier-content">
-              <div class="overview-tier-ring" style="--tier-score:{trust_score:.0f}%"><span><b>{h(tier)}</b><small>Tier</small></span></div>
+              <div class="overview-tier-ring" style="--tier-score:{trust_score if trust_score_issued else 0:.0f}%"><span><b>{h(tier)}</b><small>Tier</small></span></div>
               <div class="tier-legend"><p class="active"><i></i>A – High Assurance</p><p><i></i>B – Moderate</p><p><i></i>C – Limited</p><p><i></i>D – High Risk</p><strong>{h(tier_name)}</strong></div>
             </div>
           </article>

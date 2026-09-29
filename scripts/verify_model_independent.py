@@ -77,7 +77,7 @@ def print_report(report: dict) -> None:
     print(f"Feature count: {report['feature_count']}")
     print(f"Target column: {report['target_column']}")
     print(f"Classes: {', '.join(report['classes'])}")
-    print(f"Accuracy: {report['accuracy']}")
+    print(f"Observed evaluation accuracy: {report['accuracy']}")
     print(f"Weighted F1: {report['f1_weighted']}")
     print(f"Macro F1: {report['f1_macro']}")
     print()

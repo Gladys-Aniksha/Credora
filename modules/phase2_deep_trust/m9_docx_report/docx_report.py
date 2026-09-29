@@ -30,8 +30,62 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
     doc.add_heading("Credora Trust Report", 0)
     doc.add_paragraph(f"Model: {model_name}")
     doc.add_paragraph(f"Generated at: {report_dict.get('generated_at', 'unknown')}")
-    doc.add_paragraph(f"Final trust score: {report_dict.get('trust_score', 0)}/100")
+    trust_result = next(
+        (result for result in report_dict.get("module_results", []) if result.get("module") == "trust_score"),
+        {},
+    )
+    if trust_result.get("details", {}).get("issued") is False:
+        doc.add_paragraph("Final trust score: Not issued because the Security Gate failed")
+    else:
+        doc.add_paragraph(f"Final trust score: {report_dict.get('trust_score', 0)}/100")
     doc.add_paragraph(f"Deployment status: {report_dict.get('status', 'unknown')}")
+
+    threat_model = report_dict.get("threat_model", {})
+    if threat_model:
+        summary = threat_model.get("summary", {})
+        doc.add_heading("Threat Model", level=1)
+        doc.add_paragraph(
+            f"Overall posture: {summary.get('overall_threat_posture', 'UNKNOWN')} | "
+            f"Threats: {summary.get('threats_identified', 0)} | "
+            f"Critical: {summary.get('critical', 0)} | High: {summary.get('high', 0)} | "
+            f"Mitigated: {summary.get('mitigated', 0)} | Not assessed: {summary.get('not_assessed', 0)}"
+        )
+        important = [
+            threat
+            for threat in threat_model.get("threats", [])
+            if threat.get("residual_severity") in {"Critical", "High"}
+            or threat.get("detection_status") in {"HIGH RISK", "DETECTED"}
+        ]
+        if important:
+            for threat in important:
+                doc.add_heading(f"{threat.get('id')}: {threat.get('name')}", level=2)
+                doc.add_paragraph(
+                    f"Status: {threat.get('detection_status')} | "
+                    f"Residual risk: {threat.get('residual_severity')}"
+                )
+                doc.add_paragraph(f"Controls: {', '.join(threat.get('existing_controls', []))}")
+                doc.add_paragraph(f"Residual risk: {threat.get('residual_explanation', '')}")
+        else:
+            doc.add_paragraph("No critical or high residual threats were identified by available evidence.")
+
+        doc.add_heading("Threat-to-Control Mapping", level=2)
+        matrix = doc.add_table(rows=1, cols=4)
+        matrix.style = "Table Grid"
+        for cell, title in zip(matrix.rows[0].cells, ("Threat", "Existing Control", "Result", "Residual Risk")):
+            cell.text = title
+        for row in threat_model.get("control_matrix", []):
+            cells = matrix.add_row().cells
+            cells[0].text = str(row.get("threat", ""))
+            cells[1].text = str(row.get("existing_control", ""))
+            cells[2].text = str(row.get("result", ""))
+            cells[3].text = str(row.get("residual_risk", ""))
+
+        doc.add_heading("Security Assumptions", level=2)
+        for assumption in threat_model.get("security_assumptions", []):
+            doc.add_paragraph(str(assumption), style="List Bullet")
+        doc.add_heading("Out-of-Scope Threats", level=2)
+        for threat in threat_model.get("out_of_scope_threats", []):
+            doc.add_paragraph(str(threat), style="List Bullet")
 
     doc.add_heading("Module Results", level=1)
     table = doc.add_table(rows=1, cols=4)

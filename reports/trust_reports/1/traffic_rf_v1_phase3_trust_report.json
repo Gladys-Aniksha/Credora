@@ -1,0 +1,1717 @@
+{
+  "model_name": "traffic_rf_v1",
+  "generated_at": "2026-09-29T04:06:02.251720+00:00",
+  "trust_score": 70.0,
+  "status": "warning",
+  "module_results": [
+    {
+      "module": "model_verification",
+      "status": "pass",
+      "score": 90.0,
+      "summary": "Verified traffic_rf_v1.onnx; SHA256 captured and format reviewed.",
+      "findings": [
+        {
+          "module": "model_verification",
+          "title": "Hash matched trusted baseline",
+          "severity": "info",
+          "description": "The model hash matches a server-side or package-verified baseline.",
+          "recommendation": ""
+        },
+        {
+          "module": "model_verification",
+          "title": "Missing or invalid signature",
+          "severity": "medium",
+          "description": "No package-verified signature was established for this model artifact.",
+          "recommendation": "Sign and scan model artifacts through the Credora package flow before deployment."
+        }
+      ],
+      "details": {
+        "file_name": "traffic_rf_v1.onnx",
+        "extension": ".onnx",
+        "sha256": "16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3",
+        "size_mb": 0.065,
+        "signature_verified": false,
+        "expected_sha256_source": "server_registry"
+      }
+    },
+    {
+      "module": "dependency_scanner",
+      "status": "pass",
+      "score": 90.0,
+      "summary": "Scanned 4 package(s) from requirements_demo.txt.",
+      "findings": [
+        {
+          "module": "dependency_scanner",
+          "title": "No vulnerabilities returned",
+          "severity": "info",
+          "description": "No known vulnerabilities were returned by the local audit command.",
+          "recommendation": ""
+        },
+        {
+          "module": "dependency_scanner",
+          "title": "pip-audit warning",
+          "severity": "low",
+          "description": "pip-audit could not fully complete: Command '['C:\\\\Users\\\\glady\\\\Mini project\\\\.venv\\\\Scripts\\\\python.exe', '-m', 'pip_audit', '-r', 'C:\\\\Users\\\\glady\\\\Mini project\\\\data\\\\uploads\\\\1\\\\requirements\\\\requirements_demo.txt', '-f', 'json']' timed out after 45 seconds",
+          "recommendation": "Ensure pip-audit is installed and network access is available for full audits."
+        }
+      ],
+      "details": {
+        "package_count": 4,
+        "packages": [
+          "scikit-learn",
+          "pandas",
+          "numpy",
+          "joblib"
+        ],
+        "vulnerabilities": []
+      }
+    },
+    {
+      "module": "classifier_evaluation",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Evaluated 675 encrypted traffic flow record(s).",
+      "findings": [
+        {
+          "module": "classifier_evaluation",
+          "title": "Classifier performance is strong",
+          "severity": "info",
+          "description": "Weighted F1 is 1.00.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "labels": [
+          "Normal",
+          "Suspicious",
+          "VPN"
+        ],
+        "confusion_matrix": [
+          [
+            225,
+            0,
+            0
+          ],
+          [
+            0,
+            225,
+            0
+          ],
+          [
+            0,
+            0,
+            225
+          ]
+        ],
+        "feature_columns": [
+          "flow_duration",
+          "packet_count",
+          "avg_packet_size",
+          "bytes_sent",
+          "bytes_received",
+          "iat_mean",
+          "iat_std",
+          "flow_bytes_per_second"
+        ],
+        "class_metrics": {
+          "Normal": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 225.0
+          },
+          "Suspicious": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 225.0
+          },
+          "VPN": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 225.0
+          }
+        },
+        "weak_classes": [],
+        "confusion_pairs": []
+      }
+    },
+    {
+      "module": "robustness_testing",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Tested robustness across 25 trials with 5.0% numeric feature perturbation.",
+      "findings": [
+        {
+          "module": "robustness_testing",
+          "title": "Robust under small feature changes",
+          "severity": "info",
+          "description": "Perturbed F1 remained 1.000 with 1.000 prediction stability.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "noise_level": 0.05,
+        "trial_count": 25,
+        "lower_percentile": 10,
+        "baseline_accuracy": 1.0,
+        "baseline_f1": 1.0,
+        "mean_perturbed_accuracy": 1.0,
+        "worst_case_accuracy": 1.0,
+        "mean_perturbed_f1": 1.0,
+        "perturbed_f1": 1.0,
+        "f1_drop": 0.0,
+        "mean_prediction_stability": 1.0,
+        "prediction_stability": 1.0,
+        "perturbed_features": [
+          "flow_duration",
+          "packet_count",
+          "avg_packet_size",
+          "bytes_sent",
+          "bytes_received",
+          "iat_mean",
+          "iat_std",
+          "flow_bytes_per_second"
+        ],
+        "trials": [
+          {
+            "seed": 0,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 1,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 2,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 3,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 4,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 5,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 6,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 7,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 8,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 9,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 10,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 11,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 12,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 13,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 14,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 15,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 16,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 17,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 18,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 19,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 20,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 21,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 22,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 23,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          },
+          {
+            "seed": 24,
+            "accuracy": 1.0,
+            "f1": 1.0,
+            "prediction_stability": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "module": "data_drift_detection",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Compared 8 numeric traffic feature(s) against baseline data.",
+      "findings": [
+        {
+          "module": "data_drift_detection",
+          "title": "No major drift detected",
+          "severity": "info",
+          "description": "Current test traffic is close to the baseline feature distribution.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "baseline_dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_train.csv",
+        "current_dataset_path": "C:\\Users\\glady\\Mini project\\data\\uploads\\1\\datasets\\encrypted_traffic_train.csv",
+        "mean_psi": 0.0,
+        "max_psi": 0.0,
+        "drifted_features": [],
+        "feature_drift": [
+          {
+            "feature": "flow_duration",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "packet_count",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "avg_packet_size",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "bytes_sent",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "bytes_received",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "iat_mean",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "iat_std",
+            "psi": 0.0,
+            "drift_level": "low"
+          },
+          {
+            "feature": "flow_bytes_per_second",
+            "psi": 0.0,
+            "drift_level": "low"
+          }
+        ]
+      }
+    },
+    {
+      "module": "explainability",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Extracted top feature influences using model-agnostic SHAP evidence.",
+      "findings": [
+        {
+          "module": "explainability",
+          "title": "SHAP fallback explanation used",
+          "severity": "info",
+          "description": "The model did not expose native feature importance, so Credora estimated model-agnostic SHAP influence on a bounded data sample.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "method": "shap",
+        "top_features": [
+          {
+            "feature": "flow_duration",
+            "importance": 0.2174
+          },
+          {
+            "feature": "packet_count",
+            "importance": 0.20508
+          },
+          {
+            "feature": "flow_bytes_per_second",
+            "importance": 0.16129
+          },
+          {
+            "feature": "bytes_sent",
+            "importance": 0.14027
+          },
+          {
+            "feature": "bytes_received",
+            "importance": 0.12522
+          },
+          {
+            "feature": "avg_packet_size",
+            "importance": 0.07035
+          },
+          {
+            "feature": "iat_mean",
+            "importance": 0.06615
+          },
+          {
+            "feature": "iat_std",
+            "importance": 0.01424
+          }
+        ],
+        "top_feature_importance": 0.2174,
+        "top_3_importance": 0.58377,
+        "shap_attempted": true
+      }
+    },
+    {
+      "module": "dataset_leakage",
+      "status": "warning",
+      "score": 55.0,
+      "summary": "Compared 675 test row(s) with 675 training/baseline row(s) for leakage and generalization evidence.",
+      "findings": [
+        {
+          "module": "dataset_leakage",
+          "title": "Possible holdout leakage",
+          "severity": "high",
+          "description": "100.0% of unique test feature rows also appear in the training baseline.",
+          "recommendation": "Rebuild the split from raw data using group/time-aware separation, then rerun the scan on an untouched holdout file."
+        },
+        {
+          "module": "dataset_leakage",
+          "title": "Train/test performance is consistent",
+          "severity": "info",
+          "description": "Training and test weighted F1 differ by 0.000.",
+          "recommendation": ""
+        }
+      ],
+      "details": {
+        "training_dataset_available": true,
+        "training_dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_train.csv",
+        "test_row_count": 675,
+        "training_row_count": 675,
+        "common_features": [
+          "flow_duration",
+          "packet_count",
+          "avg_packet_size",
+          "bytes_sent",
+          "bytes_received",
+          "iat_mean",
+          "iat_std",
+          "flow_bytes_per_second"
+        ],
+        "feature_overlap_rate": 1.0,
+        "full_row_overlap_rate": 1.0,
+        "train_f1": 1.0,
+        "test_f1": 1.0,
+        "generalization_gap": 0.0
+      }
+    },
+    {
+      "module": "privacy_risk",
+      "status": "pass",
+      "score": 92.0,
+      "summary": "Compared prediction confidence on 675 training/baseline row(s) and 675 holdout row(s).",
+      "findings": [
+        {
+          "module": "privacy_risk",
+          "title": "No strong confidence memorization signal",
+          "severity": "info",
+          "description": "Train/test confidence gap is 0.000 on the sampled rows.",
+          "recommendation": ""
+        },
+        {
+          "module": "privacy_risk",
+          "title": "Very high confidence across splits",
+          "severity": "low",
+          "description": "Both training and test predictions are near-certain, which can make privacy claims harder to validate on easy datasets.",
+          "recommendation": "Retest with a harder recent holdout set and calibrated confidence reporting."
+        }
+      ],
+      "details": {
+        "training_dataset_available": true,
+        "confidence_available": true,
+        "training_dataset_path": "C:\\Users\\glady\\Mini project\\data\\processed\\encrypted_traffic_train.csv",
+        "feature_columns": [
+          "flow_duration",
+          "packet_count",
+          "avg_packet_size",
+          "bytes_sent",
+          "bytes_received",
+          "iat_mean",
+          "iat_std",
+          "flow_bytes_per_second"
+        ],
+        "train_mean_confidence": 0.9975,
+        "test_mean_confidence": 0.9975,
+        "confidence_gap": 0.0,
+        "train_high_confidence_rate": 0.9644,
+        "test_high_confidence_rate": 0.9644,
+        "high_confidence_gap": 0.0
+      }
+    },
+    {
+      "module": "behavior_analysis",
+      "status": "pass",
+      "score": 100.0,
+      "summary": "Analysed class behavior, confidence, confusion, and feature reliance across 675 flow record(s).",
+      "findings": [
+        {
+          "module": "behavior_analysis",
+          "title": "Security-sensitive class detection is strong",
+          "severity": "info",
+          "description": "The model correctly handles monitored class(es): Suspicious on this test set.",
+          "recommendation": "Keep a separate malicious/suspicious holdout set and retest before every deployment."
+        },
+        {
+          "module": "behavior_analysis",
+          "title": "Prediction confidence is stable",
+          "severity": "info",
+          "description": "Mean confidence is 0.9975; low-confidence rate is 0.0%.",
+          "recommendation": "Keep monitoring confidence drift in production traffic."
+        }
+      ],
+      "details": {
+        "confidence": {
+          "available": true,
+          "mean_confidence": 0.9975,
+          "p10_confidence": 0.9929,
+          "low_confidence_rate": 0.0
+        },
+        "weak_classes": [],
+        "malicious_or_suspicious_classes": [
+          "Suspicious"
+        ],
+        "confusion_pairs": [],
+        "top_features": [],
+        "class_metrics": {
+          "Normal": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 225.0
+          },
+          "VPN": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 225.0
+          },
+          "Suspicious": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 225.0
+          }
+        }
+      }
+    },
+    {
+      "module": "model_risk_analyzer",
+      "status": "pass",
+      "score": 90.0,
+      "summary": "Checked artifact-level model deployment risk indicators.",
+      "findings": [
+        {
+          "module": "model_risk_analyzer",
+          "title": "Model signature not verified",
+          "severity": "medium",
+          "description": "Credora did not verify an Ed25519 package signature for this artifact.",
+          "recommendation": "Scan a signed .credora package before deployment approval."
+        }
+      ],
+      "details": {
+        "file_name": "traffic_rf_v1.onnx",
+        "extension": ".onnx",
+        "size_mb": 0.065,
+        "metadata_fields": [
+          "algorithm",
+          "class_labels",
+          "demo_f1_score",
+          "expected_features",
+          "framework",
+          "model_name",
+          "target_column",
+          "task",
+          "training_dataset_path",
+          "version"
+        ],
+        "expected_feature_count": 8,
+        "signature_verified": false
+      }
+    },
+    {
+      "module": "adversarial_validation",
+      "status": "pass",
+      "score": 99.62,
+      "summary": "Ran 3 adversarial encrypted-flow scenarios across 25 trials; worst-case F1 was 0.997.",
+      "findings": [
+        {
+          "module": "adversarial_validation",
+          "title": "Adversarial release tests passed",
+          "severity": "info",
+          "description": "All 3 scenarios retained stable classifier behavior; worst-case F1 was 0.997.",
+          "recommendation": "Keep these scenarios as mandatory release tests and expand them with captured production traffic."
+        }
+      ],
+      "details": {
+        "trial_count": 25,
+        "lower_percentile": 10,
+        "baseline_accuracy": 1.0,
+        "baseline_f1": 1.0,
+        "baseline_sensitive_recall": 1.0,
+        "worst_case_f1": 0.997,
+        "worst_case_scenario": "sensor_feature_dropout",
+        "max_f1_drop": 0.003,
+        "absolute_f1_penalty": 0.0,
+        "absolute_sensitive_recall_penalty": 0.0,
+        "minimum_prediction_stability": 0.997,
+        "worst_sensitive_recall": 1.0,
+        "sensitive_labels": [
+          "Suspicious"
+        ],
+        "scenarios": [
+          {
+            "scenario": "timing_jitter",
+            "description": "Large but plausible changes to duration and inter-arrival timing.",
+            "features_changed": [
+              "flow_duration",
+              "iat_mean",
+              "iat_std"
+            ],
+            "trial_count": 25,
+            "lower_percentile": 10,
+            "mean_accuracy": 1.0,
+            "accuracy": 1.0,
+            "mean_f1": 1.0,
+            "f1": 1.0,
+            "f1_drop": 0.0,
+            "mean_prediction_stability": 1.0,
+            "prediction_stability": 1.0,
+            "mean_sensitive_recall": 1.0,
+            "sensitive_recall": 1.0,
+            "trials": [
+              {
+                "seed": 0,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 1,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 2,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 3,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 4,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 5,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 6,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 7,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 8,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 9,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 10,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 11,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 12,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 13,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 14,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 15,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 16,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 17,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 18,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 19,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 20,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 21,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 22,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 23,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 24,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              }
+            ]
+          },
+          {
+            "scenario": "sensitive_flow_evasion",
+            "description": "Security-sensitive flows are blended toward benign byte and packet patterns.",
+            "features_changed": [
+              "packet_count",
+              "avg_packet_size",
+              "bytes_sent",
+              "bytes_received",
+              "flow_bytes_per_second"
+            ],
+            "trial_count": 25,
+            "lower_percentile": 10,
+            "mean_accuracy": 1.0,
+            "accuracy": 1.0,
+            "mean_f1": 1.0,
+            "f1": 1.0,
+            "f1_drop": 0.0,
+            "mean_prediction_stability": 1.0,
+            "prediction_stability": 1.0,
+            "mean_sensitive_recall": 1.0,
+            "sensitive_recall": 1.0,
+            "trials": [
+              {
+                "seed": 0,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 1,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 2,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 3,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 4,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 5,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 6,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 7,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 8,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 9,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 10,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 11,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 12,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 13,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 14,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 15,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 16,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 17,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 18,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 19,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 20,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 21,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 22,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 23,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 24,
+                "accuracy": 1.0,
+                "f1": 1.0,
+                "prediction_stability": 1.0,
+                "sensitive_recall": 1.0
+              }
+            ]
+          },
+          {
+            "scenario": "sensor_feature_dropout",
+            "description": "The two strongest numeric sensor features are replaced by their median.",
+            "features_changed": [
+              "flow_duration",
+              "packet_count"
+            ],
+            "trial_count": 25,
+            "lower_percentile": 10,
+            "mean_accuracy": 0.997,
+            "accuracy": 0.997,
+            "mean_f1": 0.997,
+            "f1": 0.997,
+            "f1_drop": 0.003,
+            "mean_prediction_stability": 0.997,
+            "prediction_stability": 0.997,
+            "mean_sensitive_recall": 1.0,
+            "sensitive_recall": 1.0,
+            "trials": [
+              {
+                "seed": 0,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 1,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 2,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 3,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 4,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 5,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 6,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 7,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 8,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 9,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 10,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 11,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 12,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 13,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 14,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 15,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 16,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 17,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 18,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 19,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 20,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 21,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 22,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 23,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              },
+              {
+                "seed": 24,
+                "accuracy": 0.997,
+                "f1": 0.997,
+                "prediction_stability": 0.997,
+                "sensitive_recall": 1.0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "runtime_integrity",
+      "status": "pass",
+      "score": 80.0,
+      "summary": "Compared the runtime model artifact with its approved integrity baseline.",
+      "findings": [
+        {
+          "module": "runtime_integrity",
+          "title": "Runtime hash baseline established",
+          "severity": "info",
+          "description": "The model artifact matches the approved SHA-256 value.",
+          "recommendation": "Recheck this hash at service startup and on a scheduled runtime interval."
+        },
+        {
+          "module": "runtime_integrity",
+          "title": "Runtime signature evidence missing",
+          "severity": "medium",
+          "description": "Credora did not verify a signed package for the deployed artifact.",
+          "recommendation": "Sign the model manifest and verify the package before starting the model service."
+        }
+      ],
+      "details": {
+        "integrity_state": "changed",
+        "model_path": "C:\\Users\\glady\\Mini project\\data\\uploads\\1\\models\\traffic_rf_v1.onnx",
+        "actual_sha256": "16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3",
+        "expected_sha256": "16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3",
+        "expected_sha256_source": "server_registry",
+        "signature_valid": false,
+        "file_size_bytes": 67706,
+        "file_modified_at": "2026-09-29T04:04:27.844321+00:00",
+        "checked_at": "2026-09-29T04:06:02.063966+00:00"
+      }
+    },
+    {
+      "module": "deployment_gate",
+      "status": "fail",
+      "score": 66.67,
+      "summary": "Production deployment blocked by 2 required gate check(s).",
+      "findings": [
+        {
+          "module": "deployment_gate",
+          "title": "Deployment blocked",
+          "severity": "high",
+          "description": "Failed production gate checks: Trust score, No high-risk findings.",
+          "recommendation": "Rebuild the split from raw data using group/time-aware separation, then rerun the scan on an untouched holdout file."
+        }
+      ],
+      "details": {
+        "decision": "blocked",
+        "checks": [
+          {
+            "check": "Trust score",
+            "passed": false,
+            "actual": 70.0,
+            "target": 85.0,
+            "required": true
+          },
+          {
+            "check": "Classifier score",
+            "passed": true,
+            "actual": 100.0,
+            "target": 85.0,
+            "required": true
+          },
+          {
+            "check": "Adversarial resilience",
+            "passed": true,
+            "actual": 99.62,
+            "target": 80.0,
+            "required": true
+          },
+          {
+            "check": "Runtime artifact integrity",
+            "passed": true,
+            "actual": "pass",
+            "target": "pass",
+            "required": true
+          },
+          {
+            "check": "Security-sensitive recall",
+            "passed": true,
+            "actual": 1.0,
+            "target": 0.9,
+            "required": true
+          },
+          {
+            "check": "No high-risk findings",
+            "passed": false,
+            "actual": 1,
+            "target": 0,
+            "required": true
+          }
+        ],
+        "failed_checks": [
+          "Trust score",
+          "No high-risk findings"
+        ],
+        "high_risk_finding_count": 1,
+        "medium_risk_finding_count": 3,
+        "policy": {
+          "minimum_trust_score": 85.0,
+          "minimum_classifier_score": 85.0,
+          "minimum_adversarial_score": 80.0,
+          "minimum_sensitive_recall": 0.9
+        }
+      }
+    },
+    {
+      "module": "trust_drift_timeline",
+      "status": "pass",
+      "score": 85.0,
+      "summary": "Compared current trust score with 50 previous scan(s) for this model.",
+      "findings": [
+        {
+          "module": "trust_drift_timeline",
+          "title": "Trust score is stable",
+          "severity": "info",
+          "description": "No meaningful trust regression was detected against previous scans.",
+          "recommendation": ""
+        },
+        {
+          "module": "trust_drift_timeline",
+          "title": "Below historical best",
+          "severity": "medium",
+          "description": "Current score is 27.58 points below this model's best recorded score.",
+          "recommendation": "Inspect the trust timeline for version regressions."
+        }
+      ],
+      "details": {
+        "previous_scan_count": 50,
+        "previous_latest_score": 70.0,
+        "previous_best_score": 97.58,
+        "drop_from_latest": 0.0,
+        "drop_from_best": 27.58
+      }
+    },
+    {
+      "module": "trust_score",
+      "status": "warning",
+      "score": 70.0,
+      "summary": "Unsigned model provenance caps the maximum trust score until a signed package is verified.",
+      "findings": [
+        {
+          "module": "trust_score",
+          "title": "High-risk findings present",
+          "severity": "high",
+          "description": "There are 2 high or critical finding(s).",
+          "recommendation": "Resolve high-risk findings before deployment."
+        },
+        {
+          "module": "trust_score",
+          "title": "Raw model provenance cap applied",
+          "severity": "medium",
+          "description": "Unsigned .joblib, .pkl, and .onnx uploads cannot score above 70/100.",
+          "recommendation": "Package and sign the model with Credora before requesting deployment approval."
+        }
+      ],
+      "details": {
+        "weights": {
+          "model_verification": 0.09,
+          "dependency_scanner": 0.06,
+          "classifier_evaluation": 0.13,
+          "robustness_testing": 0.08,
+          "data_drift_detection": 0.07,
+          "explainability": 0.07,
+          "dataset_leakage": 0.08,
+          "privacy_risk": 0.07,
+          "behavior_analysis": 0.08,
+          "model_risk_analyzer": 0.05,
+          "adversarial_validation": 0.09,
+          "runtime_integrity": 0.06,
+          "deployment_gate": 0.05,
+          "trust_drift_timeline": 0.02
+        },
+        "expected_modules": [
+          "model_verification",
+          "dependency_scanner",
+          "classifier_evaluation",
+          "robustness_testing",
+          "data_drift_detection",
+          "explainability",
+          "dataset_leakage",
+          "privacy_risk",
+          "behavior_analysis",
+          "model_risk_analyzer",
+          "adversarial_validation",
+          "runtime_integrity",
+          "deployment_gate",
+          "trust_drift_timeline"
+        ],
+        "modules_scored": [
+          "model_verification",
+          "dependency_scanner",
+          "classifier_evaluation",
+          "robustness_testing",
+          "data_drift_detection",
+          "explainability",
+          "dataset_leakage",
+          "privacy_risk",
+          "behavior_analysis",
+          "model_risk_analyzer",
+          "adversarial_validation",
+          "runtime_integrity",
+          "deployment_gate",
+          "trust_drift_timeline"
+        ],
+        "missing_modules": [],
+        "module_coverage": 1.0,
+        "deployment_decision": "blocked",
+        "raw_model_trust_cap": 70.0
+      }
+    }
+  ],
+  "recommendations": [
+    "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
+    "Create a fresh holdout from raw traffic using time-aware or source-aware splitting, remove duplicate feature rows, lock the file, and rerun the scan without reusing training rows.",
+    "Create a signed .credora package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .onnx uploads outside the trusted packaging pipeline.",
+    "Install or repair pip-audit in the scanner environment, confirm vulnerability-database access, and rerun the dependency assessment so the release is based on a completed audit."
+  ],
+  "docx_report_path": "C:\\Users\\glady\\Mini project\\reports\\trust_reports\\1\\traffic_rf_v1_phase3_trust_report.docx",
+  "analysis_trace": [
+    {
+      "step": 1,
+      "module": "model_verification",
+      "status": "pass",
+      "score": 90.0,
+      "method": "Calculated the artifact SHA-256, checked its format and size, and compared it with supplied identity metadata.",
+      "evidence": "File traffic_rf_v1.onnx, format .onnx, size 0.065 MB, SHA-256 16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3.",
+      "conclusion": "Verified traffic_rf_v1.onnx; SHA256 captured and format reviewed.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Missing or invalid signature"
+      ]
+    },
+    {
+      "step": 2,
+      "module": "dependency_scanner",
+      "status": "pass",
+      "score": 90.0,
+      "method": "Parsed the supplied dependency manifest and ran pip-audit to look for published package vulnerabilities.",
+      "evidence": "Parsed 4 package(s); found 0 vulnerability record(s).",
+      "conclusion": "Scanned 4 package(s) from requirements_demo.txt.",
+      "issues_found": 1,
+      "issue_titles": [
+        "pip-audit warning"
+      ]
+    },
+    {
+      "step": 3,
+      "module": "classifier_evaluation",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Ran the uploaded model against every labeled flow and calculated overall and per-class prediction metrics.",
+      "evidence": "Accuracy 1.0, weighted F1 1.0, recall 1.0.",
+      "conclusion": "Evaluated 675 encrypted traffic flow record(s).",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 4,
+      "module": "robustness_testing",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Perturbed numeric traffic features and compared the changed predictions with the clean baseline.",
+      "evidence": "Clean F1 1.0; perturbed F1 1.0; F1 drop 0.0; prediction stability 1.0.",
+      "conclusion": "Tested robustness across 25 trials with 5.0% numeric feature perturbation.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 5,
+      "module": "data_drift_detection",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Compared numeric feature distributions with the training baseline using Population Stability Index (PSI).",
+      "evidence": "Compared 8 feature(s); drifted features: none; strongest shifts: flow_duration (PSI 0.0), packet_count (PSI 0.0), avg_packet_size (PSI 0.0).",
+      "conclusion": "Compared 8 numeric traffic feature(s) against baseline data.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 6,
+      "module": "explainability",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Inspected native estimator feature importance or SHAP fallback evidence to identify the traffic signals driving predictions.",
+      "evidence": "Method: shap; leading features: flow_duration (0.217), packet_count (0.205), flow_bytes_per_second (0.161).",
+      "conclusion": "Extracted top feature influences using model-agnostic SHAP evidence.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 7,
+      "module": "dataset_leakage",
+      "status": "warning",
+      "score": 55.0,
+      "method": "Compared the uploaded holdout with the training baseline for exact overlap and train/test performance gaps.",
+      "evidence": "Feature overlap 1.0; full-row overlap 1.0; train F1 1.0; test F1 1.0; generalization gap 0.0.",
+      "conclusion": "Compared 675 test row(s) with 675 training/baseline row(s) for leakage and generalization evidence.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Possible holdout leakage"
+      ]
+    },
+    {
+      "step": 8,
+      "module": "privacy_risk",
+      "status": "pass",
+      "score": 92.0,
+      "method": "Compared prediction confidence on training-like and holdout rows to estimate memorization and membership-inference risk.",
+      "evidence": "Train mean confidence 0.998; test mean confidence 0.998; confidence gap 0.0; high-confidence gap 0.0.",
+      "conclusion": "Compared prediction confidence on 675 training/baseline row(s) and 675 holdout row(s).",
+      "issues_found": 1,
+      "issue_titles": [
+        "Very high confidence across splits"
+      ]
+    },
+    {
+      "step": 9,
+      "module": "behavior_analysis",
+      "status": "pass",
+      "score": 100.0,
+      "method": "Examined class recall, confusion, probability confidence, and concentration of feature reliance.",
+      "evidence": "Weak classes: none; mean confidence 0.998; low-confidence rate 0.0.",
+      "conclusion": "Analysed class behavior, confidence, confusion, and feature reliance across 675 flow record(s).",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 10,
+      "module": "model_risk_analyzer",
+      "status": "pass",
+      "score": 90.0,
+      "method": "Reviewed artifact serialization, size, metadata completeness, expected features, and signing evidence.",
+      "evidence": "Artifact format .onnx, size 0.065 MB, 8 declared feature(s), metadata fields: algorithm, class_labels, demo_f1_score, expected_features, framework, model_name, target_column, task, training_dataset_path, version.",
+      "conclusion": "Checked artifact-level model deployment risk indicators.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Model signature not verified"
+      ]
+    },
+    {
+      "step": 11,
+      "module": "adversarial_validation",
+      "status": "pass",
+      "score": 99.62,
+      "method": "Re-ran inference under timing jitter, security-sensitive evasion, and sensor feature-dropout scenarios.",
+      "evidence": "Worst scenario sensor_feature_dropout; worst F1 0.997; maximum F1 drop 0.003; minimum stability 0.997; security-sensitive recall 1.0.",
+      "conclusion": "Ran 3 adversarial encrypted-flow scenarios across 25 trials; worst-case F1 was 0.997.",
+      "issues_found": 0,
+      "issue_titles": []
+    },
+    {
+      "step": 12,
+      "module": "runtime_integrity",
+      "status": "pass",
+      "score": 80.0,
+      "method": "Recalculated the model hash and compared it with the approved runtime identity baseline.",
+      "evidence": "Integrity state changed; expected SHA-256 16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3; observed SHA-256 16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3.",
+      "conclusion": "Compared the runtime model artifact with its approved integrity baseline.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Runtime signature evidence missing"
+      ]
+    },
+    {
+      "step": 13,
+      "module": "deployment_gate",
+      "status": "fail",
+      "score": 66.67,
+      "method": "Applied mandatory trust, classifier, adversarial, integrity, and security-sensitive recall thresholds.",
+      "evidence": "Decision blocked; failed mandatory checks: Trust score, No high-risk findings; high-risk findings 1; medium-risk findings 3.",
+      "conclusion": "Production deployment blocked by 2 required gate check(s).",
+      "issues_found": 1,
+      "issue_titles": [
+        "Deployment blocked"
+      ]
+    },
+    {
+      "step": 14,
+      "module": "trust_drift_timeline",
+      "status": "pass",
+      "score": 85.0,
+      "method": "Compared the current trust result with earlier assessments for the same model identity.",
+      "evidence": "Previous scans 50; change from latest 0.0; distance from historical best 27.58.",
+      "conclusion": "Compared current trust score with 50 previous scan(s) for this model.",
+      "issues_found": 1,
+      "issue_titles": [
+        "Below historical best"
+      ]
+    },
+    {
+      "step": 15,
+      "module": "trust_score",
+      "status": "warning",
+      "score": 70.0,
+      "method": "Combined module scores using the published Credora weighting policy.",
+      "evidence": "Final weighted score 70.0/100; deployment decision blocked.",
+      "conclusion": "Unsigned model provenance caps the maximum trust score until a signed package is verified.",
+      "issues_found": 2,
+      "issue_titles": [
+        "High-risk findings present",
+        "Raw model provenance cap applied"
+      ]
+    }
+  ],
+  "remediation_plan": [
+    {
+      "priority": "P0",
+      "module": "deployment_gate",
+      "title": "Keep deployment blocked until mandatory evidence passes",
+      "evidence": "Decision blocked; failed mandatory checks: Trust score, No high-risk findings; high-risk findings 1; medium-risk findings 3.",
+      "diagnosis": "The release fails mandatory controls: Trust score, No high-risk findings.",
+      "fix": "Resolve the P0 model and data items above, generate a new untouched evaluation report, and rerun the complete release gate; do not override the decision manually.",
+      "validation": "Every mandatory check must report passed, with no high/critical finding and a final decision of approved or explicitly reviewed conditional according to policy.",
+      "finding_titles": [
+        "Deployment blocked"
+      ],
+      "id": "FIX-01"
+    },
+    {
+      "priority": "P1",
+      "module": "dataset_leakage",
+      "title": "Rebuild the holdout split before trusting accuracy",
+      "evidence": "Feature overlap 1.0; full-row overlap 1.0; train F1 1.0; test F1 1.0; generalization gap 0.0.",
+      "diagnosis": "The uploaded evaluation data may not be independent enough to support the reported accuracy claim.",
+      "fix": "Create a fresh holdout from raw traffic using time-aware or source-aware splitting, remove duplicate feature rows, lock the file, and rerun the scan without reusing training rows.",
+      "validation": "Approve the accuracy claim only when exact overlap is 0%, the train/test F1 gap is below 0.05, and the same result holds on a recent untouched traffic window.",
+      "finding_titles": [
+        "Possible holdout leakage"
+      ],
+      "id": "FIX-02"
+    },
+    {
+      "priority": "P1",
+      "module": "model_verification",
+      "title": "Bind the model artifact to a trusted release identity",
+      "evidence": "Artifact traffic_rf_v1 uses .onnx; observed SHA-256 is 16a0a29a0cc9a166163852f16b51c334118a1fe92e7a7f907245e02e3e18f5e3.",
+      "diagnosis": "Pickle-family artifacts may execute code when loaded, and metadata-only signature claims do not establish an external chain of trust.",
+      "fix": "Create a signed .credora package for this exact SHA-256 using an offline Ed25519 private key, distribute only the public trust key to deployment, and reject raw .onnx uploads outside the trusted packaging pipeline.",
+      "validation": "Verify the package with an independently supplied public key, then require the extracted model hash to equal the approved release hash before loading it.",
+      "finding_titles": [
+        "Missing or invalid signature",
+        "Model signature not verified"
+      ],
+      "id": "FIX-03"
+    },
+    {
+      "priority": "P2",
+      "module": "dependency_scanner",
+      "title": "Complete dependency security evidence",
+      "evidence": "Parsed 4 package(s); found 0 vulnerability record(s).",
+      "diagnosis": "The software supply-chain result is incomplete or contains known vulnerable packages.",
+      "fix": "Install or repair pip-audit in the scanner environment, confirm vulnerability-database access, and rerun the dependency assessment so the release is based on a completed audit.",
+      "validation": "The next scan must complete without an audit error and return zero unresolved high or critical dependency vulnerabilities.",
+      "finding_titles": [
+        "pip-audit warning"
+      ],
+      "id": "FIX-04"
+    }
+  ]
+}
