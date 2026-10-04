@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -8,6 +9,7 @@ from sklearn.metrics import f1_score
 from core.config import DATA_DIR
 from core.model_backend import load_model_backend
 from core.report_schema import Finding, ModuleResult
+from core.sequence_data import load_sequence_dataset
 from core.security import ensure_within_directory
 
 
@@ -45,6 +47,35 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
             [Finding("dataset_leakage", "Training baseline unavailable", "medium", "Credora could not compare the uploaded test file against a training/baseline dataset.", "Provide training_dataset_path metadata that points to the original training split or a trusted baseline sample.")],
             {"training_dataset_available": False},
         )
+
+    if metadata.get("input_type", "tabular") == "sequence":
+        try:
+            train = load_sequence_dataset(train_path, metadata)
+            test = load_sequence_dataset(dataset_path, metadata)
+            train_hashes = {hashlib.sha256(row.tobytes()).hexdigest() for row in train.features}
+            test_hashes = {hashlib.sha256(row.tobytes()).hexdigest() for row in test.features}
+            overlap = len(train_hashes.intersection(test_hashes)) / max(len(test_hashes), 1)
+            model = load_model_backend(model_path, metadata)
+            train_pred = model.predict(train.features)
+            test_pred = model.predict(test.features)
+            train_f1 = float(f1_score(train.labels.astype(str), pd.Series(train_pred).astype(str), average="weighted", zero_division=0))
+            test_f1 = float(f1_score(test.labels.astype(str), pd.Series(test_pred).astype(str), average="weighted", zero_division=0))
+            gap = train_f1 - test_f1
+        except Exception as exc:  # noqa: BLE001
+            return ModuleResult("dataset_leakage", "fail", 0, "Sequence leakage check could not run.", [Finding("dataset_leakage", "Sequence leakage check failed", "high", str(exc), "Provide compatible training and test NPZ files.")])
+        score = 100.0
+        if overlap >= 0.20:
+            score -= 45
+            findings.append(Finding("dataset_leakage", "Possible sequence holdout leakage", "high", f"{overlap:.1%} of test sequences also appear in training.", "Rebuild the holdout with independent sequences."))
+        elif overlap >= 0.05:
+            score -= 22
+            findings.append(Finding("dataset_leakage", "Small sequence overlap detected", "medium", f"{overlap:.1%} of test sequences overlap training.", "Remove duplicate sequences before release evaluation."))
+        else:
+            findings.append(Finding("dataset_leakage", "No exact sequence leakage detected", "info", "Test sequence hashes did not exactly match training sequence hashes."))
+        if gap > 0.15:
+            score -= 20
+            findings.append(Finding("dataset_leakage", "Large sequence generalization gap", "medium", f"Training F1 is {train_f1:.3f}; test F1 is {test_f1:.3f}.", "Investigate overfitting and collect a harder holdout."))
+        return ModuleResult("dataset_leakage", "pass" if score >= 80 else "warning" if score >= 55 else "fail", round(max(score, 0.0), 2), f"Compared {len(test.features)} test sequence(s) with {len(train.features)} training sequence(s).", findings, {"input_type": "sequence", "training_dataset_available": True, "training_dataset_path": str(train_path), "test_row_count": len(test.features), "training_row_count": len(train.features), "feature_overlap_rate": round(overlap, 4), "full_row_overlap_rate": round(overlap, 4), "train_f1": round(train_f1, 4), "test_f1": round(test_f1, 4), "generalization_gap": round(gap, 4)})
 
     try:
         train = pd.read_csv(train_path)

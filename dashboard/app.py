@@ -41,6 +41,7 @@ from dashboard.components.scan_submission import (
     execute_scan_submission,
     render_scan_submission,
 )
+from dashboard.components.sequence_evidence import render_sequence_evidence
 from dashboard.components.topbar import render_dashboard_topbar
 from dashboard.pages.admin import render_admin_page
 from dashboard.pages.auth import require_dashboard_auth
@@ -758,6 +759,8 @@ behavior = modules.get("behavior_analysis", {})
 behavior_details = behavior.get("details", {})
 explainability = modules.get("explainability", {})
 explainability_details = explainability.get("details", {})
+robustness = modules.get("robustness_testing", {})
+robustness_details = robustness.get("details", {})
 leakage = modules.get("dataset_leakage", {})
 leakage_details = leakage.get("details", {})
 privacy = modules.get("privacy_risk", {})
@@ -830,6 +833,7 @@ if page == "Overview":
         dep_count,
         metric_histories,
         trust_score_issued,
+        security_gate_details.get("decision") == "passed",
     )
 
     drift_col, summary_col = st.columns([1.45, 1.0], gap="small")
@@ -888,6 +892,8 @@ elif page == "Model Registry":
 
 elif page == "Traffic Classifier":
     render_page_head("Traffic Classifier", "Class behavior, prediction quality, confidence, and feature reliance")
+    input_type = str(report_data.get("input_type", "tabular"))
+    st.caption(f"Input track: {input_type.title()}")
     st.markdown("### Deep Assessment Trace")
     st.caption("Open any completed step to see the method used, the exact evidence observed, and the conclusion reached.")
     if analysis_trace:
@@ -936,6 +942,9 @@ elif page == "Traffic Classifier":
                 heatmap = px.imshow(pd.DataFrame(matrix, index=labels, columns=labels), text_auto=True, color_continuous_scale="Teal", aspect="auto")
                 heatmap.update_layout(coloraxis_showscale=False, xaxis_title="Predicted", yaxis_title="Actual")
                 st.plotly_chart(chart_layout(heatmap, 330), width="stretch", config={"displayModeBar": False})
+
+    if input_type == "sequence":
+        render_sequence_evidence(report_data, explainability_details, robustness_details, drift)
 
     st.markdown("### Phase 2 Trustworthiness Evidence")
     e1, e2, e3, e4 = st.columns(4)
@@ -1050,6 +1059,16 @@ elif page == "Trust Score":
         with st.container(border=True):
             if trust_score_issued:
                 st.markdown(assurance_tier_html(trust_score, str(report_data.get("status", "not run")).title()), unsafe_allow_html=True)
+                if security_gate_details.get("decision") != "passed":
+                    st.error(
+                        "Security Gate failed. This Trust Score is assessment evidence only; "
+                        "the model must not be deployed."
+                    )
+                    failed_checks = [
+                        check for check in security_gate_details.get("checks", []) if not check.get("passed")
+                    ]
+                    if failed_checks:
+                        st.dataframe(pd.DataFrame(failed_checks), hide_index=True, width="stretch")
             else:
                 st.error("Trust Score not issued. The model must pass every mandatory Security Gate check first.")
                 failed_checks = [
@@ -1076,7 +1095,12 @@ elif page == "Threat Model":
 
 elif page == "Trust Drift":
     render_page_head("Trust Drift", "Changes in deployment confidence across model assessments")
-    scan_rows = [scan for scan in scan_history if scan.get("model_name") == model_name]
+    report_input_type = str(report_data.get("input_type", "tabular"))
+    scan_rows = [
+        scan for scan in scan_history
+        if scan.get("model_name") == model_name
+        and scan.get("input_type", "tabular") == report_input_type
+    ]
     with st.container(border=True):
         if scan_rows:
             history = pd.DataFrame(scan_rows).sort_values("generated_at")

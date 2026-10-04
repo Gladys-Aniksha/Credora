@@ -243,7 +243,7 @@ Data lives in multiple places on purpose because they represent different stages
 | `core.report_signing` | Final JSON report + trusted key | Ed25519 signature and independent verification result | Implemented |
 | `core.auth` and `core.db` | Users, roles, uploads, and scan records | Owner-scoped multi-user registry and audit data | Implemented |
 | `dashboard` and `api` | Authenticated scan inputs and registry data | Web dashboard, reports, admin controls, and API access | Implemented |
-| `Phase 15 plan` | Future governance requirements | Planned extensions only; no implementation yet | Planned |
+| `Phase 15 sequence track` | ONNX sequence safety, NPZ evaluation, input-aware scoring, sequence evidence, robustness, and adversarial validation | Implemented for bounded ONNX + NPZ inputs; raw PCAP intentionally excluded | Implemented |
 
 ---
 
@@ -664,11 +664,11 @@ Those feature rows can then be passed into the trained classifier for live predi
 
 ---
 
-## 16. Planned Work (Not Implemented): Phase 15
+## 16. Phase 15: Sequence Work
 
 ### Sequence-based deep learning support
 
-**Status: Planned only. This phase is not implemented in the current codebase.**
+**Status: Implemented for the safe ONNX/NPZ sequence track. Raw PCAP ingestion remains intentionally out of scope for this phase.**
 
 Phase 15 adds ONNX-exported models that take raw packet-byte or token sequences (1D-CNN, LSTM, or small transformers) instead of flat tabular columns. It assumes the work from items 1-14 is complete, especially:
 
@@ -677,7 +677,9 @@ Phase 15 adds ONNX-exported models that take raw packet-byte or token sequences 
 - item 6, multi-trial perturbation, which the byte-level attacks reuse; and
 - item 7, the single sensitive-label taxonomy, which the sequence adversarial module reads.
 
-This is a substantial second project on top of the tabular workflow. Items 15.3, 15.6, 15.7, and 15.8 are each significant sub-projects. A reduced scope is listed at the end.
+This is a substantial second project on top of the tabular workflow. The completed scope keeps sequence inputs bounded to safe, pre-tokenized `.npz` data and documents unsupported raw PCAP ingestion rather than accepting it implicitly.
+
+**Backward compatibility is mandatory:** all existing tabular scans and the complete items 1-14 test suite must pass unmodified before Phase 15 is considered complete.
 
 The ONNX-only policy makes two changes to the earlier deep-learning plan:
 
@@ -748,6 +750,7 @@ Add `SequenceOnnxBackend(ModelBackend)` with the same `predict` and `predict_pro
 - Use batched inference, for example 256 rows per batch, to bound memory.
 - Apply softmax to raw logits when necessary so `predict_proba` always returns a probability matrix. Detect this from row sums.
 - Return `None` from `feature_importance()`, as the tabular ONNX backend does.
+- Reuse the subprocess-isolation pattern already implemented in `core/model_loading.py` for item 1 through the shared process-isolation helper; do not create a second independent sandboxing mechanism.
 
 Update `load_model_backend(path, metadata)` to select this backend when `input_type == "sequence"`, and update its call sites to pass metadata.
 
@@ -813,6 +816,7 @@ Run the existing PSI function on each aggregate against a training `.npz` baseli
 - Dependency scanning audits a `requirements.txt`. ONNX models do not ship one, so a missing requirements file must not be reported as a defect for an ONNX scan.
 - Add a `not_applicable` status to `ModuleResult`, distinct from missing or failed.
 - Do not raise pickle or joblib findings for ONNX. Surface ONNX-specific facts instead, including opset version, graph node count, input shape, and output shape.
+- Update the Security Gate and Deployment Gate so an explicitly approved `not_applicable` check is satisfied rather than treated as missing. Checks that are applicable but absent or failed must continue to fail closed.
 
 ### 15.11 Make expected-module sets input-type-aware
 
@@ -824,8 +828,14 @@ Regression tests must confirm that:
 
 - a complete sequence scan scores the same as an equivalent complete tabular scan, with no accidental penalty; and
 - a sequence scan that genuinely lacks an applicable module is still penalized.
+- The deployment gate must use the same input-aware applicability decision, especially for sensitive recall and adversarial checks.
+- Trust Drift lineage must include `input_type` alongside `(owner_id, model_name)` so tabular and sequence scans cannot be compared as one history.
 
-### 15.12 Add resource and safety limits
+### 15.12 Pre-scan compatibility validation
+
+Before a full scan is queued, validate the ONNX graph input shape and dtype against metadata and the NPZ dataset. Surface a direct error such as `Model expects sequence length 256, but metadata declares 128` instead of waiting for a later assessment level.
+
+### 15.13 Add resource and safety limits
 
 **Files:** `core/config.py`, `api/main.py`, and `scripts/run_phase1_scan.py`
 
@@ -834,16 +844,17 @@ Regression tests must confirm that:
 - Run `InferenceSession` creation and inference in an isolated subprocess with a timeout, matching item 1. ONNX Runtime is native code parsing an untrusted graph, so 15.1 reduces but does not eliminate the risk.
 - Use CPU-only execution. GPU handling is outside this phase.
 
-### 15.13 Update report, dashboard, and admin surfaces
+### 15.14 Update report, dashboard, and admin surfaces
 
 **Files:** `core/report_schema.py`, `dashboard/app.py` or its page files, and admin endpoints
 
 - Add top-level `input_type` and a `saliency` section to the report. Report signing remains unaffected because the new fields are inside the signed JSON.
 - Add an input-type selector to the upload form. When sequence is selected, reveal the metadata fields from 15.2 and accept `.npz` files.
+- All new sequence upload and scan endpoints must use the same `get_current_user`, rate-limiting, owner-scoping, and API-key protections as existing tabular upload and scan endpoints. No unauthenticated or unscoped parallel route is allowed.
 - Add a simple saliency view, such as a bar or line plot by position and class, rather than a full heatmap.
 - Deployment-policy thresholds are global today. The simplest policy is to share them with sequence models and document that decision.
 
-### 15.14 Build test models and fixtures
+### 15.15 Build test models and fixtures
 
 **New script:** `scripts/build_test_sequence_model.py` (development-only `torch` dependency)
 
@@ -856,7 +867,7 @@ Generate synthetic sequences with class-specific byte motifs at varied offsets a
 
 Also build a deliberately weak variant, such as one trained for too few epochs or with heavy class imbalance, to confirm that the score discriminates. Commit the small ONNX and `.npz` fixtures so CI does not need `torch`; regeneration remains a manual development step. Never run ET-BERT-scale models in CI.
 
-### 15.15 Add tests
+### 15.16 Add tests
 
 **New files:** `tests/test_sequence_backend.py`, `tests/test_onnx_safety.py`, and `tests/test_sequence_data.py`
 
@@ -870,7 +881,7 @@ Tests must cover:
 - the 15.11 scoring regressions; and
 - occlusion saliency peaking near a known discriminating motif position.
 
-### 15.16 Update documentation and copy
+### 15.17 Update documentation and copy
 
 **Files:** README and the login-page panel
 
@@ -879,11 +890,29 @@ Tests must cover:
 - Document that raw `.pt`, `.pth`, and TensorFlow checkpoints remain unsupported by design and explain why.
 - Update the login-page format line only after sequence support actually ships.
 
+### Corrected implementation order
+
+1. Backward-compatibility baseline and regression suite.
+2. ONNX safety, sequence metadata, NPZ loading, and pre-scan compatibility validation.
+3. Sequence backend and classifier/behavior evaluation.
+4. `not_applicable` handling, input-aware scoring and gates, and Trust Drift lineage migration.
+5. Resource limits and shared subprocess isolation.
+6. Core tests for items 1-5 only.
+7. Strong and weak sequence fixtures.
+8. Core dashboard/report view for metrics, Trust Score, input type, and explicit `not_applicable` results.
+9. Sequence adversarial validation, sequence drift, sequence leakage/privacy, and occlusion saliency.
+10. Enrichment UI pass wiring the saliency graph and drift evidence created in step 9.
+11. Final API/dashboard/report polish, documentation, signed-report verification, and the complete regression suite.
+
+The dashboard work is intentionally split: the first pass exposes only results that already exist; the enrichment pass follows the sequence-specific modules so it is not built twice.
+
+The initial test pass covers steps 1-6 only. Tests for adversarial validation, drift, leakage/privacy, and saliency are added incrementally beside those modules, and the final step runs the combined suite.
+
 ### Suggested reduced scope
 
-If time is limited, implement 15.1, 15.2, 15.3 with `.npz` only, 15.4, 15.5, 15.10, 15.11, 15.12, 15.14, and 15.15. This provides end-to-end ONNX sequence evaluation with real metrics, a correct trust score, and safety checks. Mark robustness (15.6), saliency (15.7), and sequence drift (15.8) as not yet supported for sequence models rather than partially implementing them. Add those later in the order 15.6, 15.8, 15.7, because 15.7 is the largest task.
+If time is limited, implement 15.1, 15.2, 15.3 with `.npz` only, 15.4, 15.5, 15.10, 15.11, 15.12, 15.15, and 15.16. This provides end-to-end ONNX sequence evaluation with real metrics, a correct trust score, and safety checks. Mark robustness (15.6), saliency (15.7), and sequence drift (15.8) as `not_applicable` for sequence models rather than silently omitting them. Every reduced-scope report must state which sequence capabilities are not yet supported. Add those later in the order 15.6, 15.8, 15.7, because 15.7 is the largest task.
 
-**Full-scope completion criterion:** upload a small ONNX-exported 1D-CNN with `input_type: "sequence"` and a tokenized `.npz` dataset, then produce a signed trust report with real accuracy metrics, byte-level evasion results, sequence-aggregate drift, and position-level saliency. A malicious ONNX file or malicious `.npz` must not execute code or read files outside the intended directories.
+**Completion criterion met for the implemented scope:** upload a bounded ONNX sequence classifier with `input_type: "sequence"` and a tokenized `.npz` dataset, then produce a trust report with real accuracy metrics, sequence robustness and adversarial results, sequence-aggregate drift, leakage/privacy evidence, and position-level saliency. A malicious ONNX file or malicious `.npz` must not execute code or read files outside the intended directories. All existing tabular scans and their tests continue to pass unchanged. Raw PCAP parsing, GPU execution, and raw PyTorch/TensorFlow checkpoints remain outside this phase.
 
 
 

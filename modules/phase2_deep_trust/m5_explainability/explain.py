@@ -7,6 +7,7 @@ import pandas as pd
 
 from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
+from core.sequence_data import load_sequence_dataset
 
 
 def _shap_importance(model: ModelBackend, x_sample: pd.DataFrame) -> tuple[list[dict], str]:
@@ -37,6 +38,31 @@ def _shap_importance(model: ModelBackend, x_sample: pd.DataFrame) -> tuple[list[
 def explain_model(model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None) -> ModuleResult:
     metadata = metadata or {}
     findings: list[Finding] = []
+    if metadata.get("input_type", "tabular") == "sequence":
+        try:
+            model = load_model_backend(model_path, metadata)
+            dataset = load_sequence_dataset(dataset_path, metadata)
+            samples = dataset.features[: min(len(dataset.features), 20)]
+            window = max(1, samples.shape[1] // 16)
+            saliency: list[dict] = []
+            for start in range(0, samples.shape[1], window):
+                occluded = samples.copy()
+                occluded[:, start : start + window] = metadata.get("pad_id", 0)
+                original = model.predict_proba(samples)
+                changed = model.predict_proba(occluded)
+                if original is None or changed is None:
+                    raise ValueError("Sequence model did not expose probability outputs for occlusion.")
+                predicted = np.argmax(original, axis=1)
+                drops = original[np.arange(len(original)), predicted] - changed[np.arange(len(changed)), predicted]
+                saliency.append({"position_start": start, "position_end": min(start + window, samples.shape[1]), "saliency": round(float(np.mean(drops)), 6)})
+            top = sorted(saliency, key=lambda item: item["saliency"], reverse=True)[:10]
+            if top and top[0]["position_start"] < window * 2:
+                findings.append(Finding("explainability", "Sequence saliency is concentrated near the beginning", "medium", "The first sequence positions have unusually high occlusion impact and may represent shortcut or header learning.", "Validate saliency on sequences from different capture sources and inspect whether early bytes are stable features."))
+            else:
+                findings.append(Finding("explainability", "Sequence occlusion saliency available", "info", "Credora measured how much each sequence window changes the original prediction probability."))
+            return ModuleResult("explainability", "warning" if any(item.severity == "medium" for item in findings) else "pass", 75.0 if len(findings) > 1 else 100.0, "Measured sequence explanation using bounded sliding-window occlusion.", findings, {"input_type": "sequence", "method": "occlusion", "saliency": saliency, "top_saliency": top, "shap_attempted": False})
+        except Exception as exc:  # noqa: BLE001
+            return ModuleResult("explainability", "warning", 60, "Sequence occlusion explanation could not run.", [Finding("explainability", "Sequence explanation unavailable", "medium", str(exc), "Use an ONNX sequence model with probability outputs and a compatible NPZ dataset.")], {"input_type": "sequence", "method": "not_available", "saliency": []})
     try:
         model = load_model_backend(model_path)
         data = pd.read_csv(dataset_path)

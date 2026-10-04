@@ -17,6 +17,7 @@ def analyze_model_risk(model_path: str | Path, metadata: dict | None = None) -> 
     size_mb = path.stat().st_size / (1024 * 1024)
     extension = path.suffix.lower()
     expected_features = metadata.get("expected_features") or []
+    input_type = metadata.get("input_type", "tabular")
 
     if extension in {".pkl", ".pickle", ".joblib"}:
         score -= 12
@@ -36,7 +37,13 @@ def analyze_model_risk(model_path: str | Path, metadata: dict | None = None) -> 
         if missing:
             score -= min(25, len(missing) * 5)
             findings.append(Finding("model_risk_analyzer", "Incomplete metadata", "medium", f"Missing metadata field(s): {', '.join(missing)}.", "Complete model metadata before deployment."))
-    if not expected_features:
+    if input_type == "sequence":
+        required_sequence = ["max_sequence_length", "sequence_dtype", "vocab_size", "class_labels"]
+        missing_sequence = [field for field in required_sequence if not metadata.get(field)]
+        if missing_sequence:
+            score -= min(30, len(missing_sequence) * 8)
+            findings.append(Finding("model_risk_analyzer", "Incomplete sequence contract", "high", f"Missing sequence metadata: {', '.join(missing_sequence)}.", "Provide the complete sequence input contract before scanning."))
+    elif not expected_features:
         score -= 12
         findings.append(Finding("model_risk_analyzer", "Expected feature list missing", "medium", "The system cannot strictly validate dataset/model feature compatibility.", "Add expected_features to metadata.json."))
     if metadata.get("_signature_verified") is not True:
@@ -69,6 +76,9 @@ def analyze_model_risk(model_path: str | Path, metadata: dict | None = None) -> 
             "size_mb": round(size_mb, 3),
             "metadata_fields": sorted(key for key in metadata.keys() if not key.startswith("_")),
             "expected_feature_count": len(expected_features),
+            "input_type": input_type,
+            "sequence_length": metadata.get("max_sequence_length"),
+            "sequence_dtype": metadata.get("sequence_dtype"),
             "signature_verified": metadata.get("_signature_verified") is True,
         },
     )

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 import pickletools
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
 import joblib
+
+from core.process_isolation import IsolatedProcessError, run_isolated_python
 
 
 class UnsafeModelError(ValueError):
@@ -84,43 +84,21 @@ def _load_after_static_check(path: str | Path) -> Any:
 def _run_deserialization_preflight(path: str | Path, timeout_seconds: int = MODEL_LOAD_TIMEOUT_SECONDS) -> None:
     """Load the model once in a child process before this process deserializes it."""
     model_path = Path(path).resolve()
-    project_root = Path(__file__).resolve().parents[1]
-    env = os.environ.copy()
-    existing_pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = str(project_root) if not existing_pythonpath else f"{project_root}{os.pathsep}{existing_pythonpath}"
-    env[_CHILD_LOAD_ENV] = "1"
-
-    command = [
-        sys.executable,
-        "-c",
-        (
+    code = (
             "from pathlib import Path; "
             "from core.model_loading import _load_after_static_check; "
             f"model = _load_after_static_check(Path({str(model_path)!r})); "
             "assert callable(getattr(model, 'predict', None)), 'loaded artifact does not expose predict()'; "
             "print('ok')"
-        ),
-    ]
-
+    )
     try:
-        completed = subprocess.run(
-            command,
-            cwd=project_root,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+        run_isolated_python(
+            code,
+            timeout_seconds=timeout_seconds,
+            environment={_CHILD_LOAD_ENV: "1"},
         )
-    except subprocess.TimeoutExpired as exc:
-        raise UnsafeModelError(f"Model deserialization timed out after {timeout_seconds} second(s) in isolated preflight.") from exc
-    except OSError as exc:
-        raise UnsafeModelError(f"Model deserialization preflight could not start: {exc}") from exc
-
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "unknown child-process failure").strip()
-        raise UnsafeModelError(f"Model deserialization failed in isolated preflight: {detail}")
+    except IsolatedProcessError as exc:
+        raise UnsafeModelError(f"Model deserialization failed in isolated preflight: {exc}") from exc
 
 
 def load_checked_model(path: str | Path) -> Any:

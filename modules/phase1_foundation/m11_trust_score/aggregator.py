@@ -36,7 +36,13 @@ def calculate_trust_score(
     missing_modules: list[str] = []
 
     active_weights = get_trust_weights()
-    for module in expected_modules:
+    not_applicable_modules = [
+        module
+        for module in expected_modules
+        if by_module.get(module) is not None and by_module[module].status == "not_applicable"
+    ]
+    applicable_modules = [module for module in expected_modules if module not in not_applicable_modules]
+    for module in applicable_modules:
         weight = active_weights[module]
         result = by_module.get(module)
         if result is None:
@@ -48,7 +54,7 @@ def calculate_trust_score(
         total_weight += weight
 
     normalized_score = weighted_score / total_weight if total_weight else 0.0
-    module_coverage = len(scored_modules) / len(expected_modules) if expected_modules else 0.0
+    module_coverage = len(scored_modules) / len(applicable_modules) if applicable_modules else 0.0
     final_score = normalized_score * module_coverage
     if final_score >= 85:
         status = "pass"
@@ -73,40 +79,12 @@ def calculate_trust_score(
         details={
             "weights": active_weights,
             "expected_modules": list(expected_modules),
+            "applicable_modules": applicable_modules,
+            "not_applicable_modules": not_applicable_modules,
             "modules_scored": scored_modules,
             "missing_modules": missing_modules,
             "module_coverage": round(module_coverage, 4),
             "issued": True,
-        },
-    )
-
-
-def trust_score_not_issued(security_gate: ModuleResult) -> ModuleResult:
-    """Represent a blocked score without presenting zero as an assurance measurement."""
-    failed_checks = list(security_gate.details.get("failed_checks", []))
-    return ModuleResult(
-        module="trust_score",
-        status="not_run",
-        score=0.0,
-        summary="Trust Score was not issued because the Security Gate failed.",
-        findings=[
-            Finding(
-                "trust_score",
-                "Trust Score not issued",
-                "critical",
-                "Mandatory security evidence failed before weighted assurance scoring.",
-                "Resolve the failed Security Gate checks and rerun the assessment.",
-            )
-        ],
-        details={
-            "issued": False,
-            "blocked_by": "security_gate",
-            "failed_security_checks": failed_checks,
-            "weights": {},
-            "expected_modules": [],
-            "modules_scored": [],
-            "missing_modules": [],
-            "module_coverage": 0.0,
         },
     )
 

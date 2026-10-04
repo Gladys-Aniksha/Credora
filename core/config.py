@@ -46,6 +46,16 @@ TRUSTED_ORIGINS = [
 ]
 API_KEY = _required_environment_variable("CREDORA_API_KEY")
 MAX_UPLOAD_BYTES = int(os.getenv("CREDORA_MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))
+MAX_SEQUENCE_MODEL_BYTES = int(
+    os.getenv("CREDORA_MAX_SEQUENCE_MODEL_BYTES", str(100 * 1024 * 1024))
+)
+MAX_SEQUENCE_DATASET_BYTES = int(
+    os.getenv("CREDORA_MAX_SEQUENCE_DATASET_BYTES", str(100 * 1024 * 1024))
+)
+MAX_SEQUENCE_ROWS = int(os.getenv("CREDORA_MAX_SEQUENCE_ROWS", "200000"))
+MAX_SEQUENCE_LENGTH = int(os.getenv("CREDORA_MAX_SEQUENCE_LENGTH", "8192"))
+SEQUENCE_INFERENCE_BATCH_SIZE = int(os.getenv("CREDORA_SEQUENCE_BATCH_SIZE", "256"))
+SEQUENCE_INFERENCE_TIMEOUT_SECONDS = int(os.getenv("CREDORA_SEQUENCE_TIMEOUT_SECONDS", "30"))
 
 for directory in [RAW_DATA_DIR, PROCESSED_DATA_DIR, SAMPLE_MODEL_DIR, SAMPLE_REQUIREMENTS_DIR, METADATA_DIR, REPORT_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
@@ -58,7 +68,9 @@ def verify_model_file_type(path: str | Path) -> bool:
         return False
     if extension == ".onnx":
         try:
-            onnx.checker.check_model(str(file_path))
+            from core.onnx_safety import validate_onnx_model
+
+            validate_onnx_model(file_path)
         except (onnx.checker.ValidationError, OSError, ValueError):
             return False
         return True

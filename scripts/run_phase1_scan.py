@@ -16,6 +16,7 @@ from core.hashing import sha256_file
 from core.report_schema import Finding, ModuleResult, TrustReport
 from core.report_signing import sign_report_dict
 from core.security import ensure_within_directory, slugify_filename
+from core.sequence_validation import validate_sequence_compatibility
 from core.storage import save_json
 from core.threat_model import build_threat_model
 from modules.phase1_foundation.m1_model_verification.verifier import verify_model
@@ -25,7 +26,6 @@ from modules.phase1_foundation.m11_trust_score.aggregator import (
     FINAL_EXPECTED_MODULES,
     PRE_DEPLOYMENT_EXPECTED_MODULES,
     calculate_trust_score,
-    trust_score_not_issued,
 )
 from modules.phase2_deep_trust.m3_robustness_testing.robustness import test_robustness
 from modules.phase2_deep_trust.m4_data_drift.drift import detect_data_drift
@@ -43,6 +43,27 @@ from modules.phase3_operations.m6_runtime_integrity.watcher import check_runtime
 
 
 RAW_MODEL_TRUST_CAP = 70.0
+
+
+def _sequence_not_applicable(module: str, capability: str) -> ModuleResult:
+    return ModuleResult(
+        module=module,
+        status="not_applicable",
+        score=0.0,
+        summary=f"{capability} is not available for sequence models in the current release.",
+        findings=[Finding(
+            module,
+            f"{capability} not yet supported for sequence models",
+            "info",
+            "The assessment records this limitation explicitly; it was not silently skipped or treated as passed.",
+            "Use the result as a documented limitation until the sequence-specific module is implemented.",
+        )],
+        details={
+            "input_type": "sequence",
+            "policy_approved": True,
+            "reason": "sequence_module_not_implemented",
+        },
+    )
 
 
 def _safe_report_path(model_name: str, suffix: str, owner_id: int | None = None) -> Path:
@@ -66,6 +87,32 @@ def _apply_raw_model_cap(result: ModuleResult, metadata: dict[str, Any]) -> Modu
     ))
     result.details["raw_model_trust_cap"] = RAW_MODEL_TRUST_CAP
     return result
+
+
+def _attach_security_gate_context(
+    trust_result: ModuleResult,
+    security_gate: ModuleResult,
+) -> ModuleResult:
+    gate_passed = security_gate.details.get("decision") == "passed"
+    trust_result.details["security_gate_passed"] = gate_passed
+    trust_result.details["deployment_eligible"] = gate_passed
+    trust_result.details["failed_security_checks"] = list(
+        security_gate.details.get("failed_checks", [])
+    )
+    if not gate_passed:
+        trust_result.summary = (
+            f"Overall assessment score: {trust_result.score:.2f}/100. "
+            "Mandatory security checks failed, so deployment is blocked regardless of this score."
+        )
+        trust_result.findings.append(Finding(
+            "trust_score",
+            "Score does not authorize deployment",
+            "critical",
+            "The Security Gate failed. This score remains useful for assessment and drift tracking, "
+            "but it cannot be used as deployment approval.",
+            "Resolve every failed Security Gate check and rerun the assessment before deployment.",
+        ))
+    return trust_result
 
 
 def _augment_trusted_metadata(metadata: dict[str, Any], model_path: Path, package_manifest: dict[str, Any] | None = None, owner_id: int | None = None) -> dict[str, Any]:
@@ -147,18 +194,30 @@ def run_phase1_scan(
         metadata = _augment_trusted_metadata({}, model_path, package_manifest, owner_id=owner_id)
         progress("Level 0 - Intake", "Completed with warning: no metadata file was supplied; identity and feature checks will be limited.")
 
+    input_type = str(metadata.get("input_type", "tabular"))
+    metadata["input_type"] = input_type
+    metadata["model_path"] = str(model_path)
+    if input_type == "sequence":
+        compatibility = validate_sequence_compatibility(model_path, dataset_path, metadata)
+        metadata["_sequence_compatibility"] = compatibility
+        progress(
+            "Level 0 - Intake",
+            f"Completed: sequence compatibility validated for {compatibility['rows']} row(s) "
+            f"with length {compatibility['sequence_length']}.",
+        )
+
     results: list[ModuleResult] = []
     results.append(run_step("Level 1 - Integrity", "calculating the artifact hash and checking type, signature metadata, and size.", lambda: verify_model(model_path, metadata)))
-    results.append(run_step("Level 2 - Supply Chain", "auditing declared packages and known dependency vulnerabilities.", lambda: scan_dependencies(requirements_path)))
+    results.append(run_step("Level 2 - Supply Chain", "auditing declared packages and known dependency vulnerabilities.", lambda: scan_dependencies(requirements_path, metadata)))
     results.append(run_step("Level 3 - Classifier Performance", "running every labeled flow through the model and calculating per-class metrics.", lambda: evaluate_classifier(model_path, dataset_path, metadata)))
-    results.append(run_step("Level 4 - Robustness", "perturbing numeric flow features and measuring prediction stability.", lambda: test_robustness(model_path, dataset_path, metadata)))
-    results.append(run_step("Level 5 - Data Drift", "comparing current flow distributions with the training baseline using PSI.", lambda: detect_data_drift(dataset_path, metadata)))
-    results.append(run_step("Level 6 - Explainability", "ranking the traffic features that drive model decisions, with SHAP fallback when native importance is unavailable.", lambda: explain_model(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 4 - Robustness", "perturbing numeric flow features or sequence positions and measuring prediction stability.", lambda: test_robustness(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 5 - Data Drift", "comparing current feature distributions with the training baseline using PSI.", lambda: detect_data_drift(dataset_path, metadata)))
+    results.append(run_step("Level 6 - Explainability", "ranking feature or sequence-window influence, with SHAP or occlusion evidence.", lambda: explain_model(model_path, dataset_path, metadata)))
     results.append(run_step("Level 7 - Leakage and Generalization", "checking whether the uploaded holdout overlaps training data and whether train/test performance is credible.", lambda: check_dataset_leakage(model_path, dataset_path, metadata)))
     results.append(run_step("Level 8 - Privacy Risk", "comparing train-vs-holdout confidence to estimate memorization and membership-inference risk.", lambda: assess_privacy_risk(model_path, dataset_path, metadata)))
     results.append(run_step("Level 9 - Behavior Analysis", "examining confidence, weak classes, security-sensitive recall, confusion, and feature reliance.", lambda: analyze_behavior(model_path, dataset_path, metadata)))
     results.append(run_step("Level 10 - Model Risk", "reviewing serialization, metadata completeness, artifact size, and deployment-risk indicators.", lambda: analyze_model_risk(model_path, metadata)))
-    results.append(run_step("Level 11 - Adversarial Validation", "testing timing jitter, sensitive-flow evasion, and sensor feature dropout.", lambda: run_adversarial_validation(model_path, dataset_path, metadata)))
+    results.append(run_step("Level 11 - Adversarial Validation", "testing timing jitter, sensitive-flow evasion, sensor feature dropout, or sequence perturbations.", lambda: run_adversarial_validation(model_path, dataset_path, metadata)))
     results.append(run_step("Level 12 - Runtime Integrity", "comparing the active artifact with its approved hash and signature baseline.", lambda: check_runtime_integrity(model_path, metadata)))
 
     security_gate = run_step(
@@ -169,29 +228,23 @@ def run_phase1_scan(
     results.append(security_gate)
     model_name = metadata.get("model_name") or Path(model_path).stem
 
-    if security_gate.details.get("trust_score_eligible") is True:
-        progress("Level 14 - Trust Scoring", "Starting: combining non-gate assurance evidence using the published weighting policy.")
-        preliminary_trust = calculate_trust_score(results, PRE_DEPLOYMENT_EXPECTED_MODULES)
-        results.append(
-            run_step(
-                "Level 15 - Trust Drift",
-                "comparing this score with prior assessments of the same model identity.",
-                lambda: analyze_trust_drift(preliminary_trust.score, model_name, owner_id=owner_id),
-            )
+    progress("Level 14 - Trust Scoring", "Starting: combining non-gate assurance evidence using the published weighting policy.")
+    preliminary_trust = calculate_trust_score(results, PRE_DEPLOYMENT_EXPECTED_MODULES)
+    results.append(
+        run_step(
+            "Level 15 - Trust Drift",
+            "comparing this score with prior assessments of the same model identity.",
+            lambda: analyze_trust_drift(preliminary_trust.score, model_name, owner_id=owner_id, input_type=input_type),
         )
-        trust_result = calculate_trust_score(results, FINAL_EXPECTED_MODULES)
-        trust_result = _apply_raw_model_cap(trust_result, metadata)
-        progress("Level 14 - Trust Scoring", f"Completed: Trust Score issued at {trust_result.score:.1f}/100.")
-    else:
-        results.append(ModuleResult(
-            module="trust_drift_timeline",
-            status="not_run",
-            score=0.0,
-            summary="Trust drift was not evaluated because the Security Gate blocked Trust Score issuance.",
-            details={"blocked_by": "security_gate"},
-        ))
-        trust_result = trust_score_not_issued(security_gate)
-        progress("Level 14 - Trust Scoring", "Blocked: no Trust Score was issued because the Security Gate failed.")
+    )
+    trust_result = calculate_trust_score(results, FINAL_EXPECTED_MODULES)
+    trust_result = _apply_raw_model_cap(trust_result, metadata)
+    trust_result = _attach_security_gate_context(trust_result, security_gate)
+    gate_note = " Security Gate failed; deployment is blocked." if security_gate.status == "fail" else ""
+    progress(
+        "Level 14 - Trust Scoring",
+        f"Completed: Trust Score calculated at {trust_result.score:.1f}/100.{gate_note}",
+    )
 
     results.append(trust_result)
     deployment_gate = run_step(
@@ -221,6 +274,7 @@ def run_phase1_scan(
         analysis_trace=analysis_trace,
         remediation_plan=remediation_plan,
         threat_model=threat_model,
+        input_type=input_type,
     )
     output_path = _safe_report_path(model_name, "phase3_trust_report.json", owner_id=owner_id)
 
@@ -249,6 +303,7 @@ def run_phase1_scan(
                 analysis_trace=analysis_trace,
                 remediation_plan=remediation_plan,
                 threat_model=threat_model,
+                input_type=input_type,
             )
 
     if docx_path:
@@ -270,6 +325,7 @@ def run_phase1_scan(
         metadata_path=metadata_path,
         sha256=sha256_file(model_path),
         owner_id=owner_id,
+        input_type=input_type,
     )
     save_scan(report_dict, output_path, owner_id=owner_id)
     progress(

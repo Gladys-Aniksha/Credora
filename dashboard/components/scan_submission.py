@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
 import streamlit as st
 
 from core.config import METADATA_DIR, PROCESSED_DATA_DIR, SAMPLE_MODEL_DIR, SAMPLE_REQUIREMENTS_DIR
 from core.security import ensure_within_directory
+from core.sequence_validation import validate_sequence_compatibility
 from scripts.run_phase1_scan import run_phase1_scan
 
 
@@ -60,16 +62,26 @@ def render_scan_submission(project_root: Path, *, standalone: bool = False) -> S
             metadata_path = METADATA_DIR / "traffic_rf_v1_metadata.json"
             st.success("Legitimate Random Forest classifier ready")
         else:
+            input_type = st.radio(
+                "Model input type",
+                ["Tabular flow features", "Sequence tokens/bytes"],
+                horizontal=True,
+                key="assessment_input_type",
+            )
+            is_sequence = input_type == "Sequence tokens/bytes"
             model_upload = st.file_uploader(
-                "Trained model (.joblib, .pkl, or .onnx)",
-                type=["joblib", "pkl", "onnx"],
+                "Sequence ONNX model (.onnx)" if is_sequence else "Trained model (.joblib, .pkl, or .onnx)",
+                type=["onnx"] if is_sequence else ["joblib", "pkl", "onnx"],
                 key="sidebar_model_upload",
             )
             dataset_upload = st.file_uploader(
-                "Labeled test dataset (.csv)", type=["csv"], key="sidebar_dataset_upload"
+                "Labeled sequence dataset (.npz)" if is_sequence else "Labeled test dataset (.csv)",
+                type=["npz"] if is_sequence else ["csv"],
+                key="sidebar_dataset_upload",
             )
             requirements_upload = st.file_uploader(
-                "Dependency requirements (.txt)", type=["txt"], key="sidebar_requirements_upload"
+                "Dependency requirements (.txt)" if not is_sequence else "Optional model requirements (.txt)",
+                type=["txt"], key="sidebar_requirements_upload"
             )
             metadata_upload = st.file_uploader(
                 "Model metadata (.json)", type=["json"], key="sidebar_metadata_upload"
@@ -78,12 +90,28 @@ def render_scan_submission(project_root: Path, *, standalone: bool = False) -> S
             dataset_path = persist_upload(dataset_upload, "datasets", project_root)
             requirements_path = persist_upload(requirements_upload, "requirements", project_root)
             metadata_path = persist_upload(metadata_upload, "metadata", project_root)
+            if is_sequence and requirements_path is None:
+                requirements_path = SAMPLE_REQUIREMENTS_DIR / "requirements_demo.txt"
+                st.caption("Standalone ONNX sequence models do not require a Python dependency manifest.")
             if st.session_state["scan_require_metadata_hash"] and metadata_path is None:
                 st.caption("Model metadata is required by the current Settings policy.")
+
+            if is_sequence and metadata_path and model_path and dataset_path:
+                try:
+                    sequence_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                    validate_sequence_compatibility(model_path, dataset_path, sequence_metadata)
+                    st.success("Sequence model, metadata, and NPZ dataset are compatible.")
+                except (OSError, ValueError, json.JSONDecodeError) as exc:
+                    st.error(f"Sequence compatibility check failed: {exc}")
+                    st.session_state["sequence_preflight_error"] = str(exc)
+                else:
+                    st.session_state.pop("sequence_preflight_error", None)
 
         inputs_ready = all([model_path, dataset_path, requirements_path])
         if st.session_state["scan_require_metadata_hash"]:
             inputs_ready = inputs_ready and metadata_path is not None
+        if mode == "Upload files" and st.session_state.get("sequence_preflight_error"):
+            inputs_ready = False
         submitted = st.button(
             "Analyze model now",
             type="primary",

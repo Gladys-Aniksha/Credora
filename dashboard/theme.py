@@ -15,22 +15,11 @@ def _asset_data_uri(path: Path, mime_type: str) -> str:
 
 
 def credora_brand_html() -> str:
+    logo_uri = _asset_data_uri(ASSETS_DIR / "credora-dashboard-logo.png", "image/png")
     return (
-        "<div class='credora-brand'><svg class='credora-logo credora-brand-logo' role='img' "
-        "aria-label='Credora Model Assurance' "
-        "viewBox='0 0 215 70' xmlns='http://www.w3.org/2000/svg'>"
-        "<g aria-hidden='true' transform='translate(2 2) scale(.93)'>"
-        "<path d='M35 4 55 16 44 23 35 18 17 29 17 20Z' fill='#9E3034'/>"
-        "<path d='M17 20 17 49 6 42 6 27Z' fill='#BC5655'/>"
-        "<path d='M17 49 35 60 55 48 44 41 35 47 17 37Z' fill='#BC5655'/>"
-        "<path d='M35 4V18L17 29V20Z' fill='#BC5655'/>"
-        "<path d='M17 37 35 47V60L17 49Z' fill='#E7AAA0'/>"
-        "</g>"
-        "<text class='credora-wordmark' x='65' y='32' font-family='Inter,Arial,sans-serif' "
-        "font-size='26' font-weight='400' letter-spacing='4.7' fill='#171515'>CREDORA</text>"
-        "<text class='credora-tagline' x='66' y='51' font-family='Inter,Arial,sans-serif' "
-        "font-size='9.2' font-weight='500' letter-spacing='3.4' fill='#5C5552'>MODEL ASSURANCE</text>"
-        "</svg></div>"
+        "<div class='credora-brand'>"
+        f"<img class='credora-brand-logo' src='{logo_uri}' alt='CREDORA Model Assurance'>"
+        "</div>"
     )
 
 
@@ -482,18 +471,21 @@ def inject_credora_theme() -> None:
         }
         .credora-brand {
             display: block;
-            width: 199px;
-            min-height: 65px;
+            width: 205px;
+            min-height: 60px;
             padding: 0;
             margin: -49px 0 34px -5px;
             border: 0;
             background: transparent;
+            overflow: visible;
         }
         .stApp [data-testid="stSidebar"] .credora-brand-logo,
         .stApp:has(#credora-overview-mode) [data-testid="stSidebar"] .credora-brand-logo {
             display: block;
-            width: 199px;
+            width: 100%;
+            max-width: 205px;
             height: auto;
+            object-fit: contain;
             overflow: visible;
         }
         .stApp [data-testid="stSidebar"] [role="radiogroup"],
@@ -638,9 +630,9 @@ def inject_credora_theme() -> None:
         .st-key-overview_upload_action {display:flex;justify-content:flex-end;margin:-8px 0 10px;}
         .st-key-overview_upload_action button {min-height:40px;border:0;border-radius:8px;background:#ad3438;color:#fff;font-weight:600;box-shadow:0 8px 18px rgba(146,40,45,.16)}
         @media(max-height:800px){
-            .credora-brand{width:190px;min-height:62px;margin:-49px 0 34px -5px;background:transparent}
+            .credora-brand{width:205px;min-height:60px;margin:-49px 0 34px -5px;background:transparent}
             .stApp [data-testid="stSidebar"] .credora-brand-logo,
-            .stApp:has(#credora-overview-mode) [data-testid="stSidebar"] .credora-brand-logo{width:190px}
+            .stApp:has(#credora-overview-mode) [data-testid="stSidebar"] .credora-brand-logo{width:100%;max-width:205px}
             .stApp [data-testid="stSidebar"] label[data-testid="stRadioOption"],
             .stApp:has(#credora-overview-mode) [data-testid="stSidebar"] label[data-testid="stRadioOption"]{min-height:34px;margin-bottom:0!important;font-size:13px}
             .stApp [data-testid="stSidebar"] label[data-testid="stRadioOption"]:nth-child(9),

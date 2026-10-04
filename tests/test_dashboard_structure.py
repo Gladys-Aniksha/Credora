@@ -118,6 +118,8 @@ def test_overview_matches_reference_structure_and_uses_real_navigation() -> None
     assert "build_drift_figure(model_scan_rows, trust_score)" in app_source
     assert "render_metric_cards(" in app_source
     assert "trust_score_issued," in app_source
+    assert "Security Gate failed. This Trust Score is assessment evidence only" in app_source
+    assert "Security Gate failed · Do not deploy" in overview_source
     assert "#credora-overview-mode" in theme_source
 
 
@@ -164,8 +166,9 @@ def test_sidebar_brand_and_fixed_layout_contract() -> None:
     assert "credora_brand_html()" in app_source
     assert "sidebar_open_alert_count" in app_source
     assert "credora-brand-logo" in theme_source
-    assert "credora-wordmark" in theme_source
-    assert ">CREDORA</text>" in theme_source
+    assert "credora-dashboard-logo.png" in theme_source
+    assert "alt='CREDORA Model Assurance'" in theme_source
+    assert "max-width: 205px" in theme_source
     assert "width: 255px !important" in theme_source
     assert ".st-key-dashboard_page" in theme_source
     assert ".sidebar-wave-container" in theme_source

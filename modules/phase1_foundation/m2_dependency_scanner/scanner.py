@@ -25,12 +25,22 @@ def parse_requirements(requirements_path: str | Path) -> list[str]:
     return packages
 
 
-def scan_dependencies(requirements_path: str | Path) -> ModuleResult:
+def scan_dependencies(requirements_path: str | Path, metadata: dict | None = None) -> ModuleResult:
+    metadata = metadata or {}
     path = Path(requirements_path)
     findings: list[Finding] = []
     packages = parse_requirements(path)
 
     if not path.exists():
+        if metadata.get("input_type") == "sequence" and Path(metadata.get("model_path", "model.onnx")).suffix.lower() == ".onnx":
+            return ModuleResult(
+                module="dependency_scanner",
+                status="not_applicable",
+                score=0,
+                summary="A standalone ONNX sequence model has no Python dependency manifest to audit.",
+                findings=[Finding("dependency_scanner", "Dependency audit not applicable", "info", "No model-specific Python runtime is loaded for this standalone ONNX artifact.")],
+                details={"input_type": "sequence", "policy_approved": True, "reason": "standalone_onnx"},
+            )
         return ModuleResult(
             module="dependency_scanner",
             status="warning",

@@ -35,9 +35,13 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
         {},
     )
     if trust_result.get("details", {}).get("issued") is False:
-        doc.add_paragraph("Final trust score: Not issued because the Security Gate failed")
+        doc.add_paragraph("Final trust score: Not available")
     else:
         doc.add_paragraph(f"Final trust score: {report_dict.get('trust_score', 0)}/100")
+    if trust_result.get("details", {}).get("security_gate_passed") is False:
+        doc.add_paragraph(
+            "SECURITY GATE FAILED: This score is assessment evidence only. Production deployment is blocked."
+        )
     doc.add_paragraph(f"Deployment status: {report_dict.get('status', 'unknown')}")
 
     threat_model = report_dict.get("threat_model", {})

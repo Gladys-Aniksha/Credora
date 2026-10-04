@@ -9,6 +9,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 from core.db import get_sensitive_label_taxonomy
 from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
+from core.sequence_data import load_sequence_dataset
 
 
 def _sensitive_labels(labels: list[str]) -> list[str]:
@@ -30,7 +31,7 @@ def _feature_importance(model: ModelBackend, feature_columns: list[str]) -> list
     return importances or []
 
 
-def _confidence_summary(model: ModelBackend, x_test: pd.DataFrame) -> dict:
+def _confidence_summary(model: ModelBackend, x_test) -> dict:
     probabilities = model.predict_proba(x_test)
     if probabilities is None:
         return {"available": False}
@@ -51,8 +52,16 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
     findings: list[Finding] = []
 
     try:
-        model = load_model_backend(model_path)
-        data = pd.read_csv(dataset_path)
+        input_type = metadata.get("input_type", "tabular")
+        model = load_model_backend(model_path, metadata)
+        if input_type == "sequence":
+            sequence_data = load_sequence_dataset(dataset_path, metadata)
+            x_test = sequence_data.features
+            y_true = pd.Series(sequence_data.labels).astype(str)
+            feature_columns: list[str] = []
+            row_count = len(sequence_data.features)
+        else:
+            data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(
             "behavior_analysis",
@@ -62,29 +71,31 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             [Finding("behavior_analysis", "Behavior analysis failed", "high", str(exc), "Verify that the model and test CSV are compatible.")],
         )
 
-    target_column = metadata.get("target_column", "label")
-    if target_column not in data.columns:
-        return ModuleResult(
-            "behavior_analysis",
-            "fail",
-            0,
-            "Target column missing for behavior analysis.",
-            [Finding("behavior_analysis", "Missing target column", "critical", f"Dataset does not contain {target_column}.")],
-        )
+    if input_type != "sequence":
+        target_column = metadata.get("target_column", "label")
+        if target_column not in data.columns:
+            return ModuleResult(
+                "behavior_analysis",
+                "fail",
+                0,
+                "Target column missing for behavior analysis.",
+                [Finding("behavior_analysis", "Missing target column", "critical", f"Dataset does not contain {target_column}.")],
+            )
 
-    feature_columns = metadata.get("expected_features") or [column for column in data.columns if column != target_column]
-    missing_features = [feature for feature in feature_columns if feature not in data.columns]
-    if missing_features:
-        return ModuleResult(
-            "behavior_analysis",
-            "fail",
-            0,
-            "Behavior analysis could not run because features are missing.",
-            [Finding("behavior_analysis", "Feature mismatch", "critical", f"Missing features: {', '.join(missing_features)}", "Upload a dataset with the model's expected feature columns.")],
-        )
+        feature_columns = metadata.get("expected_features") or [column for column in data.columns if column != target_column]
+        missing_features = [feature for feature in feature_columns if feature not in data.columns]
+        if missing_features:
+            return ModuleResult(
+                "behavior_analysis",
+                "fail",
+                0,
+                "Behavior analysis could not run because features are missing.",
+                [Finding("behavior_analysis", "Feature mismatch", "critical", f"Missing features: {', '.join(missing_features)}", "Upload a dataset with the model's expected feature columns.")],
+            )
 
-    x_test = data[feature_columns]
-    y_true = data[target_column].astype(str)
+        x_test = data[feature_columns]
+        y_true = data[target_column].astype(str)
+        row_count = len(data)
     y_pred = pd.Series(model.predict(x_test)).astype(str)
     labels = metadata.get("class_labels") or sorted(y_true.unique().tolist())
     labels = [str(label) for label in labels]
@@ -222,7 +233,8 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
 
     score = round(max(0.0, min(score, 100.0)), 2)
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
-    summary = f"Analysed class behavior, confidence, confusion, and feature reliance across {len(data)} flow record(s)."
+    evidence_label = "sequence" if input_type == "sequence" else "flow"
+    summary = f"Analysed class behavior, confidence, confusion, and feature reliance across {row_count} {evidence_label} record(s)."
     return ModuleResult(
         module="behavior_analysis",
         status=status,
@@ -236,5 +248,6 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "confusion_pairs": confusion_pairs[:10],
             "top_features": top_features[:10],
             "class_metrics": {label: report.get(label, {}) for label in labels},
+            "input_type": input_type,
         },
     )

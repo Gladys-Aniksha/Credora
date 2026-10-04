@@ -52,6 +52,7 @@ def test_security_gate_passes_only_complete_mandatory_evidence() -> None:
     assert gate.status == "pass"
     assert gate.details["decision"] == "passed"
     assert gate.details["trust_score_eligible"] is True
+    assert gate.details["deployment_eligible"] is True
 
 
 def test_failed_signature_blocks_even_when_other_results_are_perfect() -> None:
@@ -61,7 +62,8 @@ def test_failed_signature_blocks_even_when_other_results_are_perfect() -> None:
     gate = evaluate_security_gate(results)
 
     assert gate.status == "fail"
-    assert gate.details["trust_score_eligible"] is False
+    assert gate.details["trust_score_eligible"] is True
+    assert gate.details["deployment_eligible"] is False
     assert "Verified model signature" in gate.details["failed_checks"]
 
 

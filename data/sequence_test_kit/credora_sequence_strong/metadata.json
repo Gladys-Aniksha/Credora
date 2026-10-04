@@ -1,0 +1,20 @@
+{
+  "model_name": "credora_sequence_strong",
+  "version": "1.0",
+  "algorithm": "Synthetic ONNX sequence classifier",
+  "framework": "ONNX",
+  "task": "Encrypted Traffic Sequence Classification",
+  "input_type": "sequence",
+  "max_sequence_length": 32,
+  "sequence_dtype": "int64",
+  "vocab_size": 256,
+  "pad_id": 0,
+  "class_labels": [
+    "Benign-HTTPS",
+    "Benign-DoH",
+    "Malicious-DoH-Tunnel"
+  ],
+  "target_column": "label",
+  "training_dataset_path": "data/sequence_test_kit/credora_sequence_strong/train.npz",
+  "fixture_note": "Synthetic shaped data for pipeline testing; not a real network capture."
+}

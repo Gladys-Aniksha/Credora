@@ -2,3 +2,4 @@ ruff==0.16.6
 mypy==1.20.2
 bandit==1.8.3
 skl2onnx
+onnxmltools==1.16.0

@@ -7,6 +7,8 @@ import pandas as pd
 
 from core.config import DATA_DIR, PROJECT_ROOT
 from core.report_schema import Finding, ModuleResult
+from core.sequence_data import load_sequence_dataset
+from core.sequence_stats import sequence_aggregates
 from core.security import SecurityValidationError, ensure_within_directory, resolve_user_data_path
 
 
@@ -30,6 +32,48 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
     metadata = metadata or {}
     findings: list[Finding] = []
     current_path = Path(current_dataset_path)
+    if metadata.get("input_type", "tabular") == "sequence":
+        baseline_raw = metadata.get("training_dataset_path") or metadata.get("baseline_dataset_path")
+        if not baseline_raw:
+            return ModuleResult(
+                "data_drift_detection", "warning", 65,
+                "No sequence training baseline was available for aggregate drift comparison.",
+                [Finding("data_drift_detection", "Missing sequence baseline", "medium", "Sequence drift needs a training NPZ baseline.", "Add training_dataset_path metadata pointing to the training NPZ file.")],
+                {"input_type": "sequence", "drifted_features": []},
+            )
+        try:
+            baseline_path = resolve_user_data_path(baseline_raw, PROJECT_ROOT)
+            baseline_path = ensure_within_directory(baseline_path, DATA_DIR)
+            baseline = load_sequence_dataset(baseline_path, metadata)
+            current = load_sequence_dataset(current_path, metadata)
+            expected = sequence_aggregates(baseline.features, metadata.get("pad_id", 0))
+            actual = sequence_aggregates(current.features, metadata.get("pad_id", 0))
+        except (OSError, ValueError, SecurityValidationError) as exc:
+            return ModuleResult(
+                "data_drift_detection", "fail", 0,
+                "Could not read sequence data for drift detection.",
+                [Finding("data_drift_detection", "Sequence drift check failed", "high", str(exc), "Provide compatible training and holdout NPZ files.")],
+            )
+        drift_rows = []
+        for column in expected.columns:
+            psi = _psi(expected[column], actual[column])
+            drift_rows.append({"feature": column, "psi": round(psi, 4), "drift_level": "high" if psi >= 0.25 else "medium" if psi >= 0.1 else "low"})
+        drifted = [row for row in drift_rows if row["psi"] >= 0.1]
+        high_drifted = [row for row in drift_rows if row["psi"] >= 0.25]
+        max_psi = max((row["psi"] for row in drift_rows), default=0.0)
+        mean_psi = float(np.mean([row["psi"] for row in drift_rows])) if drift_rows else 0.0
+        score = round(max(0.0, 100.0 - len(drifted) * 8 - len(high_drifted) * 10 - min(max_psi * 25, 20)), 2)
+        if high_drifted:
+            findings.append(Finding("data_drift_detection", "High sequence aggregate drift detected", "high", f"{len(high_drifted)} sequence aggregate(s) have PSI >= 0.25.", "Re-evaluate or retrain with current sequence traffic."))
+        elif drifted:
+            findings.append(Finding("data_drift_detection", "Moderate sequence aggregate drift detected", "medium", f"{len(drifted)} sequence aggregate(s) have PSI >= 0.10.", "Monitor the changed sequence properties and reassess if the trend continues."))
+        else:
+            findings.append(Finding("data_drift_detection", "No major sequence drift detected", "info", "Current sequence aggregates are close to the training baseline."))
+        return ModuleResult(
+            "data_drift_detection", "pass" if score >= 80 else "warning" if score >= 55 else "fail", score,
+            f"Compared {len(drift_rows)} sequence aggregate distribution(s) against the training baseline.", findings,
+            {"input_type": "sequence", "baseline_dataset_path": str(baseline_path), "current_dataset_path": str(current_path), "mean_psi": round(mean_psi, 4), "max_psi": round(max_psi, 4), "drifted_features": drifted, "feature_drift": drift_rows},
+        )
     baseline_path = metadata.get("training_dataset_path") or metadata.get("baseline_dataset_path")
     if baseline_path:
         try:

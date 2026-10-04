@@ -37,9 +37,10 @@ def test_gate_propagates_a_blocked_security_gate() -> None:
         50,
         status="fail",
         findings=[Finding("security_gate", "Security Gate blocked", "critical", "Signature failed.")],
-        details={"decision": "blocked", "trust_score_eligible": False},
+        details={"decision": "blocked", "trust_score_eligible": True, "deployment_eligible": False},
     )
     gate = evaluate_deployment_gate(results, 99)
     assert gate.status == "fail"
     assert gate.details["decision"] == "blocked"
     assert "Security Gate" in gate.details["failed_checks"]
+    assert "Trust score issued" not in gate.details["failed_checks"]

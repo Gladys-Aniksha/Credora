@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import json
 from pathlib import Path
 import hmac
 import time
@@ -77,6 +78,7 @@ from core.db import (
     update_user_role,
 )
 from core.model_package import ModelPackageError, verify_model_package
+from core.sequence_validation import validate_sequence_compatibility
 from core.report_signing import verify_report_against_trusted_signers
 from core.security import ensure_within_directory, slugify_filename
 from modules.phase3_operations.m6_runtime_integrity.scheduler import run_integrity_cycle
@@ -432,7 +434,7 @@ def save_upload(upload: UploadFile, subdir: str, owner_id: int) -> Path:
 def scan_phase1(
     model: UploadFile = File(...),
     dataset: UploadFile = File(...),
-    requirements: UploadFile = File(...),
+    requirements: UploadFile | None = File(None),
     metadata: UploadFile | None = File(None),
     trust_key: UploadFile | None = File(None),
     user: dict[str, Any] = Depends(get_current_user),
@@ -440,9 +442,22 @@ def scan_phase1(
     owner_id = int(user["id"])
     model_path = save_upload(model, "models", owner_id)
     dataset_path = save_upload(dataset, "datasets", owner_id)
-    requirements_path = save_upload(requirements, "requirements", owner_id)
+    if requirements is not None:
+        requirements_path = save_upload(requirements, "requirements", owner_id)
+    else:
+        requirements_root = ensure_within_directory(UPLOAD_DIR / str(owner_id) / "requirements", UPLOAD_DIR)
+        requirements_root.mkdir(parents=True, exist_ok=True)
+        requirements_path = ensure_within_directory(requirements_root / f"{uuid4().hex}-standalone-onnx.txt", requirements_root)
+        requirements_path.write_text("# Standalone ONNX model: no Python runtime manifest supplied.\n", encoding="utf-8")
     metadata_path = save_upload(metadata, "metadata", owner_id) if metadata else None
     trust_key_path = save_upload(trust_key, "trust_keys", owner_id) if trust_key else None
+    if metadata_path and metadata_path.exists():
+        try:
+            metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata_payload.get("input_type", "tabular") == "sequence":
+                validate_sequence_compatibility(model_path, dataset_path, metadata_payload)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=400, detail=f"Sequence compatibility check failed: {exc}") from exc
     report = run_phase1_scan(
         model_path,
         dataset_path,

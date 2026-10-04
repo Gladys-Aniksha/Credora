@@ -5,6 +5,8 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, precision_score, recall_score
 from core.model_backend import load_model_backend
 from core.report_schema import Finding, ModuleResult
+from core.sequence_data import SequenceDataError, load_sequence_dataset
+from core.sequence_validation import validate_sequence_compatibility
 
 
 def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None) -> ModuleResult:
@@ -18,28 +20,45 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
     if not data_file.exists():
         return ModuleResult("classifier_evaluation", "fail", 0, "Dataset file not found.", [Finding("classifier_evaluation", "Missing dataset", "critical", "The test dataset was not found.")])
 
+    input_type = metadata.get("input_type", "tabular")
     try:
-        model = load_model_backend(model_file)
+        if input_type == "sequence":
+            compatibility = validate_sequence_compatibility(model_file, data_file, metadata)
+            sequence_data = load_sequence_dataset(data_file, metadata)
+            model = load_model_backend(model_file, metadata)
+            X = sequence_data.features
+            y_true = pd.Series(sequence_data.labels)
+            feature_columns: list[str] = []
+            record_label = "encrypted traffic sequence"
+        else:
+            compatibility = None
+            model = load_model_backend(model_file, metadata)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("classifier_evaluation", "fail", 0, "Model could not be loaded.", [Finding("classifier_evaluation", "Model load failed", "critical", str(exc), "Use a trusted .joblib, .pkl, or ONNX tabular classifier.")])
 
-    data = pd.read_csv(data_file)
-    target_column = metadata.get("target_column", "label")
-    if target_column not in data.columns:
-        return ModuleResult("classifier_evaluation", "fail", 0, "Target column not found.", [Finding("classifier_evaluation", "Missing target column", "critical", f"Dataset does not contain '{target_column}'.")])
+    if input_type != "sequence":
+        try:
+            data = pd.read_csv(data_file)
+        except Exception as exc:  # noqa: BLE001
+            return ModuleResult("classifier_evaluation", "fail", 0, "Dataset could not be read.", [Finding("classifier_evaluation", "Dataset load failed", "critical", str(exc))])
+        target_column = metadata.get("target_column", "label")
+        if target_column not in data.columns:
+            return ModuleResult("classifier_evaluation", "fail", 0, "Target column not found.", [Finding("classifier_evaluation", "Missing target column", "critical", f"Dataset does not contain '{target_column}'.")])
 
-    expected_features = metadata.get("expected_features")
-    if expected_features:
-        missing = [feature for feature in expected_features if feature not in data.columns]
-        if missing:
-            return ModuleResult("classifier_evaluation", "fail", 0, "Dataset is missing expected features.", [Finding("classifier_evaluation", "Feature mismatch", "critical", f"Missing features: {', '.join(missing)}", "Upload a compatible dataset or metadata file.")])
-        feature_columns = expected_features
-    else:
-        feature_columns = [column for column in data.columns if column != target_column]
-        findings.append(Finding("classifier_evaluation", "No explicit feature list", "low", "Using all columns except the target label as features.", "Add expected_features to metadata for external models."))
+        expected_features = metadata.get("expected_features")
+        if expected_features:
+            missing = [feature for feature in expected_features if feature not in data.columns]
+            if missing:
+                return ModuleResult("classifier_evaluation", "fail", 0, "Dataset is missing expected features.", [Finding("classifier_evaluation", "Feature mismatch", "critical", f"Missing features: {', '.join(missing)}", "Upload a compatible dataset or metadata file.")])
+            feature_columns = expected_features
+        else:
+            feature_columns = [column for column in data.columns if column != target_column]
+            findings.append(Finding("classifier_evaluation", "No explicit feature list", "low", "Using all columns except the target label as features.", "Add expected_features to metadata for external models."))
 
-    X = data[feature_columns]
-    y_true = data[target_column]
+        X = data[feature_columns]
+        y_true = data[target_column]
+        record_label = "encrypted traffic flow"
+        compatibility = None
     y_pred = model.predict(X)
 
     accuracy = accuracy_score(y_true, y_pred)
@@ -104,7 +123,7 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
         module="classifier_evaluation",
         status=status,
         score=score,
-        summary=f"Evaluated {len(data)} encrypted traffic flow record(s).",
+        summary=f"Evaluated {len(y_true)} {record_label} record(s).",
         findings=findings,
         details={
             "accuracy": round(accuracy, 4),
@@ -117,5 +136,7 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
             "class_metrics": {label: report.get(label, {}) for label in labels},
             "weak_classes": weak_classes,
             "confusion_pairs": confusion_pairs[:10],
+            "input_type": input_type,
+            "sequence_compatibility": compatibility,
         },
     )

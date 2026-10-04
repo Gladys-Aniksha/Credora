@@ -96,6 +96,10 @@ def run_adversarial_validation(
     model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None
 ) -> ModuleResult:
     metadata = metadata or {}
+    if metadata.get("input_type", "tabular") == "sequence":
+        from modules.phase3_operations.m4_adversarial_validation.sequence_adversarial import run_sequence_adversarial_validation
+
+        return run_sequence_adversarial_validation(model_path, dataset_path, metadata)
     try:
         model = load_model_backend(model_path)
         data = pd.read_csv(dataset_path)

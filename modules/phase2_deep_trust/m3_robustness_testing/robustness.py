@@ -19,6 +19,10 @@ def _percentile(values: list[float], percentile: float = 10) -> float:
 
 def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None, noise_level: float = 0.05) -> ModuleResult:
     metadata = metadata or {}
+    if metadata.get("input_type", "tabular") == "sequence":
+        from modules.phase3_operations.m4_adversarial_validation.sequence_adversarial import run_sequence_robustness
+
+        return run_sequence_robustness(model_path, dataset_path, metadata)
     findings: list[Finding] = []
     model_file = Path(model_path)
     data_file = Path(dataset_path)

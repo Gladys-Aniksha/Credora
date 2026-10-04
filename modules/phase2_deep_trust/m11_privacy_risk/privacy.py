@@ -9,6 +9,7 @@ from core.config import DATA_DIR
 from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
 from core.security import ensure_within_directory
+from core.sequence_data import load_sequence_dataset
 
 
 def _training_dataset_path(metadata: dict) -> Path | None:
@@ -46,6 +47,34 @@ def assess_privacy_risk(model_path: str | Path, dataset_path: str | Path, metada
             [Finding("privacy_risk", "Privacy baseline unavailable", "medium", "Credora needs a training/baseline split to compare confidence on member-like and holdout rows.", "Provide a representative training baseline path in metadata for membership-inference style checks.")],
             {"training_dataset_available": False},
         )
+
+    if metadata.get("input_type", "tabular") == "sequence":
+        try:
+            model = load_model_backend(model_path, metadata)
+            train = load_sequence_dataset(train_path, metadata)
+            test = load_sequence_dataset(dataset_path, metadata)
+            train_confidence = _max_confidence(model, train.features[:1000])
+            test_confidence = _max_confidence(model, test.features[:1000])
+        except Exception as exc:  # noqa: BLE001
+            return ModuleResult("privacy_risk", "fail", 0, "Sequence privacy risk check could not run.", [Finding("privacy_risk", "Sequence privacy check failed", "high", str(exc), "Provide compatible training and holdout NPZ files.")])
+        if train_confidence is None or test_confidence is None:
+            return ModuleResult("privacy_risk", "warning", 62, "The sequence model does not expose probability confidence.", [Finding("privacy_risk", "Membership risk signal unavailable", "medium", "Credora cannot compare train-vs-test confidence without predict_proba().", "Use a sequence model with probability outputs or calibrate its outputs.")], {"input_type": "sequence", "confidence_available": False})
+        train_mean = float(np.mean(train_confidence))
+        test_mean = float(np.mean(test_confidence))
+        confidence_gap = train_mean - test_mean
+        train_high = float(np.mean(train_confidence >= 0.98))
+        test_high = float(np.mean(test_confidence >= 0.98))
+        high_confidence_gap = train_high - test_high
+        score = 100.0
+        if confidence_gap > 0.10 or high_confidence_gap > 0.20:
+            score -= 35
+            findings.append(Finding("privacy_risk", "Elevated sequence membership-inference risk", "high", f"Training confidence exceeds holdout confidence by {confidence_gap:.3f}.", "Regularize, calibrate, and repeat privacy testing."))
+        elif confidence_gap > 0.04 or high_confidence_gap > 0.10:
+            score -= 18
+            findings.append(Finding("privacy_risk", "Moderate sequence memorization signal", "medium", f"Training confidence exceeds holdout confidence by {confidence_gap:.3f}.", "Calibrate probabilities and test on an independent holdout."))
+        else:
+            findings.append(Finding("privacy_risk", "No strong sequence confidence memorization signal", "info", f"Train/test confidence gap is {confidence_gap:.3f}."))
+        return ModuleResult("privacy_risk", "pass" if score >= 80 else "warning" if score >= 55 else "fail", round(max(score, 0.0), 2), f"Compared sequence confidence on {len(train.features[:1000])} training and {len(test.features[:1000])} holdout rows.", findings, {"input_type": "sequence", "training_dataset_available": True, "confidence_available": True, "training_dataset_path": str(train_path), "train_mean_confidence": round(train_mean, 4), "test_mean_confidence": round(test_mean, 4), "confidence_gap": round(confidence_gap, 4), "train_high_confidence_rate": round(train_high, 4), "test_high_confidence_rate": round(test_high, 4), "high_confidence_gap": round(high_confidence_gap, 4)})
 
     try:
         model = load_model_backend(model_path)

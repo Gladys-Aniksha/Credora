@@ -87,6 +87,7 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 owner_id INTEGER REFERENCES users(id),
                 model_name TEXT NOT NULL,
+                input_type TEXT NOT NULL DEFAULT 'tabular',
                 version TEXT NOT NULL,
                 algorithm TEXT,
                 framework TEXT,
@@ -106,6 +107,7 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 owner_id INTEGER REFERENCES users(id),
                 model_name TEXT NOT NULL,
+                input_type TEXT NOT NULL DEFAULT 'tabular',
                 version TEXT,
                 trust_score REAL NOT NULL,
                 status TEXT NOT NULL,
@@ -171,6 +173,8 @@ def init_db() -> None:
         )
         for table in OWNER_TABLES:
             _add_column(conn, table, "owner_id INTEGER REFERENCES users(id)")
+        _add_column(conn, "model_registry", "input_type TEXT NOT NULL DEFAULT 'tabular'")
+        _add_column(conn, "scan_history", "input_type TEXT NOT NULL DEFAULT 'tabular'")
         _add_column(conn, "users", "disabled INTEGER NOT NULL DEFAULT 0")
         _add_column(conn, "users", "session_version INTEGER NOT NULL DEFAULT 0")
         conn.execute("""
@@ -219,6 +223,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_model_registry_owner ON model_registry(owner_id, id DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_history_owner ON scan_history(owner_id, id DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_lineage ON scan_history(owner_id, model_name, input_type, id DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_runtime_alerts_status ON runtime_alerts(owner_id, status, id DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_drift_windows_model ON drift_windows(owner_id, model_name, id DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_integrity_model ON integrity_checks(owner_id, model_name, id DESC)")
@@ -316,19 +321,21 @@ def register_model(
     framework: str | None = None,
     task: str | None = None,
     owner_id: int | None = None,
+    input_type: str = "tabular",
 ) -> int:
     init_db()
     with connect() as conn:
         cursor = conn.execute(
             """
             INSERT INTO model_registry (
-                owner_id, model_name, version, algorithm, framework, task, model_path,
+                owner_id, model_name, input_type, version, algorithm, framework, task, model_path,
                 dataset_path, requirements_path, metadata_path, sha256, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 owner_id,
                 model_name,
+                input_type,
                 version,
                 algorithm,
                 framework,
@@ -348,6 +355,7 @@ def save_scan(report: Any, report_path: str | Path, owner_id: int | None = None)
     init_db()
     report_dict = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     model_name = report_dict.get("model_name", "unknown_model")
+    input_type = report_dict.get("input_type", "tabular")
     version = None
     for result in report_dict.get("module_results", []):
         if result.get("module") == "model_verification":
@@ -356,12 +364,13 @@ def save_scan(report: Any, report_path: str | Path, owner_id: int | None = None)
         cursor = conn.execute(
             """
             INSERT INTO scan_history (
-                owner_id, model_name, version, trust_score, status, report_path, generated_at, report_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                owner_id, model_name, input_type, version, trust_score, status, report_path, generated_at, report_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 owner_id,
                 model_name,
+                input_type,
                 version,
                 float(report_dict.get("trust_score", 0)),
                 report_dict.get("status", "unknown"),
@@ -410,7 +419,7 @@ def list_scans(limit: int = 25, owner_id: int | None = None, include_all: bool =
     where = f" WHERE {' AND '.join(filters)}" if filters else ""
     with connect() as conn:
         rows = conn.execute(
-            f"SELECT id, owner_id, model_name, version, trust_score, status, report_path, generated_at FROM scan_history{where} ORDER BY id DESC LIMIT ?",
+            f"SELECT id, owner_id, model_name, input_type, version, trust_score, status, report_path, generated_at FROM scan_history{where} ORDER BY id DESC LIMIT ?",
             (*params, limit),
         ).fetchall()
     return [dict(row) for row in rows]

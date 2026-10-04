@@ -221,14 +221,17 @@ def render_metric_cards(
     dep_count: int,
     metric_histories: tuple[list[float], list[float], list[float]],
     trust_score_issued: bool,
+    security_gate_passed: bool,
 ) -> None:
-    tier, tier_name = _tier(trust_score) if trust_score_issued else ("–", "Security Gate blocked")
+    tier, tier_name = _tier(trust_score) if trust_score_issued else ("–", "Score unavailable")
+    if trust_score_issued and not security_gate_passed:
+        tier_name = f"{tier_name} · Deployment blocked"
     trust_note = "High trust" if trust_score >= 85 else "Review recommended" if trust_score >= 70 else "High risk"
     trust_value = f"{trust_score:.0f}<small>/ 100</small>" if trust_score_issued else "Not issued"
     trust_detail = (
-        f"{h(trust_note)}<br>{'Ready for production' if trust_score >= 85 else 'Policy review required'}"
+        f"{h(trust_note)}<br>{'Security Gate failed · Do not deploy' if not security_gate_passed else 'Ready for production' if trust_score >= 85 else 'Policy review required'}"
         if trust_score_issued
-        else "A critical security check failed"
+        else "Assessment score unavailable"
     )
     integrity_note = "No integrity issues detected" if integrity_score >= 85 else "Integrity evidence requires review"
     dep_note = "All dependencies verified" if dep_count == 0 else f"{dep_count} actionable finding(s)"
