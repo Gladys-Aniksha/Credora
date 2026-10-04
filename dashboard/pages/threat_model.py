@@ -38,6 +38,8 @@ def render_threat_model_page(threat_model: dict) -> None:
         f"<strong>{h(posture)}</strong><p>{h(threat_model.get('method', ''))}</p></div>",
         unsafe_allow_html=True,
     )
+    if summary.get("not_assessed"):
+        st.caption(summary.get("not_assessed_note", "Not independently assessed threats are excluded from the headline posture."))
 
     st.markdown("### Protected Assets")
     assets = threat_model.get("protected_assets", [])

@@ -36,7 +36,7 @@ def render_reports_page(
     with left:
         with st.container(border=True):
             st.markdown("### Generated Artifact")
-            st.markdown(f"<div class='path-box'>{h(report_path)}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='path-box'>{h(report_path.name)}</div>", unsafe_allow_html=True)
             score_text = f"Trust score {trust_score:.1f}/100" if trust_score_issued else "Trust score not issued"
             st.caption(f"Generated {format_time(generated_at)} | {score_text}")
             st.download_button(
@@ -119,6 +119,8 @@ def render_reports_page(
             f"{int(summary.get('critical', 0))} critical | {int(summary.get('high', 0))} high | "
             f"{int(summary.get('not_assessed', 0))} not assessed"
         )
+        if summary.get("not_assessed"):
+            st.caption(summary.get("not_assessed_note", "Not independently assessed threats are excluded from the headline posture."))
         priority_threats = [
             threat for threat in threat_model.get("threats", [])
             if threat.get("residual_severity") in {"Critical", "High"}

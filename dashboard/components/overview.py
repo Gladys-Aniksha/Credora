@@ -258,7 +258,7 @@ def render_metric_cards(
             <div class="metric-label">Model Assurance Tier <span>{_icon('info')}</span></div>
             <div class="tier-content">
               <div class="overview-tier-ring" style="--tier-score:{trust_score if trust_score_issued else 0:.0f}%"><span><b>{h(tier)}</b><small>Tier</small></span></div>
-              <div class="tier-legend"><p class="active"><i></i>A – High Assurance</p><p><i></i>B – Moderate</p><p><i></i>C – Limited</p><p><i></i>D – High Risk</p><strong>{h(tier_name)}</strong></div>
+              <div class="tier-legend"><p class="{'active' if tier == 'A' else ''}"><i></i>A – High Assurance</p><p class="{'active' if tier == 'B' else ''}"><i></i>B – Moderate</p><p class="{'active' if tier == 'C' else ''}"><i></i>C – Limited</p><p class="{'active' if tier == 'D' else ''}"><i></i>D – High Risk</p><strong>{h(tier_name)}</strong></div>
             </div>
           </article>
         </section>

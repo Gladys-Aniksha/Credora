@@ -65,3 +65,11 @@ def test_summary_and_matrix_cover_every_catalogued_threat() -> None:
     assert len(model["control_matrix"]) == 15
     assert model["summary"]["not_assessed"] > 0
     assert model["method"].startswith("Risk = Likelihood x Impact")
+
+
+def test_unassessed_threats_do_not_floor_overall_posture() -> None:
+    model = build_threat_model([_result("model_verification"), _result("runtime_integrity")])
+
+    assert model["summary"]["not_assessed"] > 0
+    assert model["summary"]["overall_threat_posture"] != "HIGH RISK"
+    assert model["summary"]["not_assessed_note"]

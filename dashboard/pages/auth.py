@@ -84,34 +84,31 @@ def require_dashboard_auth() -> dict:
                         type="password",
                         autocomplete="new-password",
                     )
+                    confirm_password = st.text_input(
+                        "Confirm password",
+                        type="password",
+                        autocomplete="new-password",
+                    )
                     created = st.form_submit_button(
                         "Create Account  →",
                         type="primary",
                         width="stretch",
                     )
                 if created:
-                    try:
-                        user = create_user(new_username, new_password, email or None, role="uploader")
-                    except ValueError as exc:
-                        st.error(str(exc))
+                    if new_password != confirm_password:
+                        st.error("Passwords do not match.")
                     else:
-                        st.session_state["auth_user"] = user
-                        st.session_state["access_token"] = create_access_token(user)
-                        st.session_state["refresh_token"] = create_refresh_token(user)
-                        st.rerun()
+                        try:
+                            user = create_user(new_username, new_password, email or None, role="uploader")
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.session_state["auth_user"] = user
+                            st.session_state["access_token"] = create_access_token(user)
+                            st.session_state["refresh_token"] = create_refresh_token(user)
+                            st.rerun()
                 if st.button("Back to Sign In", width="stretch", key="show-sign-in"):
                     st.session_state["dashboard_auth_mode"] = "sign_in"
                     st.rerun()
-            st.markdown(
-                """
-                <div class="auth-divider">OR</div>
-                <div class="secure-access">
-                  <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
-                    <path d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" stroke-linecap="round" stroke-linejoin="round"></path>
-                  </svg>
-                  <span>Secure access with enterprise-grade encryption</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            st.caption("Your session is scoped to your account only.")
     st.stop()

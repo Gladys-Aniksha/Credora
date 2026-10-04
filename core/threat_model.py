@@ -148,16 +148,24 @@ def build_threat_model(
 
     status_counts = {status: sum(threat["detection_status"] == status for threat in threats) for status in ("MITIGATED", "DETECTED", "WARNING", "HIGH RISK", "NOT ASSESSED")}
     severity_counts = {severity: sum(threat["residual_severity"] == severity for threat in threats) for severity in ("Critical", "High", "Medium", "Low")}
-    highest = max((cast(int, threat["residual_risk"]) for threat in threats), default=1)
+    assessed_threats = [threat for threat in threats if threat["detection_status"] != "NOT ASSESSED"]
+    highest = max((cast(int, threat["residual_risk"]) for threat in assessed_threats), default=1)
+    overall_posture = (
+        f"{risk_severity(highest).upper()} RISK"
+        if assessed_threats
+        else "NOT ASSESSED"
+    )
 
     return {
         "model_name": model_name,
         "method": "Risk = Likelihood x Impact; residual risk is reduced only when existing control evidence passes.",
         "summary": {
             "threats_identified": len(threats),
+            "assessed_threats": len(assessed_threats),
             **{key.lower(): value for key, value in severity_counts.items()},
             **{key.lower().replace(" ", "_"): value for key, value in status_counts.items()},
-            "overall_threat_posture": f"{risk_severity(highest).upper()} RISK",
+            "overall_threat_posture": overall_posture,
+            "not_assessed_note": "Not independently assessed threats are excluded from the headline posture.",
         },
         "protected_assets": PROTECTED_ASSETS,
         "threat_actors": THREAT_ACTORS,
