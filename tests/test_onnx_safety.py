@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import onnx
 import pytest
 from onnx import TensorProto, helper
 

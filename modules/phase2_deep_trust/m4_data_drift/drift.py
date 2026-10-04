@@ -32,6 +32,7 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
     metadata = metadata or {}
     findings: list[Finding] = []
     current_path = Path(current_dataset_path)
+    baseline_path: str | Path | None = None
     if metadata.get("input_type", "tabular") == "sequence":
         baseline_raw = metadata.get("training_dataset_path") or metadata.get("baseline_dataset_path")
         if not baseline_raw:

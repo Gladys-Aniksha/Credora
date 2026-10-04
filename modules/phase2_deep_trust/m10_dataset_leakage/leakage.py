@@ -37,6 +37,8 @@ def _row_fingerprints(frame: pd.DataFrame, columns: list[str]) -> set[str]:
 def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, metadata: dict | None = None) -> ModuleResult:
     metadata = metadata or {}
     findings: list[Finding] = []
+    train_f1: float | None = None
+    test_f1: float | None = None
     train_path = _training_dataset_path(metadata)
     if train_path is None or not train_path.exists():
         return ModuleResult(
@@ -97,9 +99,7 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
     full_columns = [column for column in common_features + ([target_column] if target_column in train.columns and target_column in test.columns else [])]
     full_overlap_rate = len(_row_fingerprints(train, full_columns).intersection(_row_fingerprints(test, full_columns))) / max(len(test), 1)
 
-    train_f1 = None
-    test_f1 = None
-    generalization_gap = None
+    generalization_gap: float | None = None
     if target_column in train.columns and target_column in test.columns:
         try:
             model = load_model_backend(model_path)

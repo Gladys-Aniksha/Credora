@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, precision_score, recall_score
 from core.model_backend import load_model_backend
 from core.report_schema import Finding, ModuleResult
-from core.sequence_data import SequenceDataError, load_sequence_dataset
+from core.sequence_data import load_sequence_dataset
 from core.sequence_validation import validate_sequence_compatibility
 
 
