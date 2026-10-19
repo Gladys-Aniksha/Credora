@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
@@ -165,7 +166,10 @@ class DeploymentOverrideRequest(BaseModel):
 async def reject_oversized_requests(request: Request, call_next):
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Upload exceeds Credora size limit.")
+        return JSONResponse(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            content={"detail": "Upload exceeds Credora size limit."},
+        )
     return await call_next(request)
 
 
@@ -437,6 +441,9 @@ def scan_phase1(
     requirements: UploadFile | None = File(None),
     metadata: UploadFile | None = File(None),
     trust_key: UploadFile | None = File(None),
+    flow_labels: UploadFile | None = File(None),
+    execution_device: str | None = Form(None),
+    allow_cpu_fallback: bool = Form(False),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict:
     owner_id = int(user["id"])
@@ -451,21 +458,30 @@ def scan_phase1(
         requirements_path.write_text("# Standalone ONNX model: no Python runtime manifest supplied.\n", encoding="utf-8")
     metadata_path = save_upload(metadata, "metadata", owner_id) if metadata else None
     trust_key_path = save_upload(trust_key, "trust_keys", owner_id) if trust_key else None
+    flow_labels_path = save_upload(flow_labels, "flow_labels", owner_id) if flow_labels else None
     if metadata_path and metadata_path.exists():
         try:
             metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-            if metadata_payload.get("input_type", "tabular") == "sequence":
+            if not isinstance(metadata_payload, dict):
+                raise ValueError("Model metadata must be a JSON object.")
+            if metadata_payload.get("input_type", "tabular") == "sequence" and model_path.suffix.lower() == ".onnx" and dataset_path.suffix.lower() == ".npz":
                 validate_sequence_compatibility(model_path, dataset_path, metadata_payload)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=400, detail=f"Sequence compatibility check failed: {exc}") from exc
-    report = run_phase1_scan(
-        model_path,
-        dataset_path,
-        requirements_path,
-        metadata_path,
-        trusted_public_key_path=trust_key_path,
-        owner_id=owner_id,
-    )
+    try:
+        report = run_phase1_scan(
+            model_path,
+            dataset_path,
+            requirements_path,
+            metadata_path,
+            trusted_public_key_path=trust_key_path,
+            owner_id=owner_id,
+            flow_labels_path=flow_labels_path,
+            execution_device=execution_device,
+            allow_cpu_fallback=allow_cpu_fallback,
+        )
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return report.to_dict()
 
 

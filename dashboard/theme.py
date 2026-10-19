@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
+from xml.etree import ElementTree
 
 import streamlit as st
 
@@ -15,7 +16,24 @@ def _asset_data_uri(path: Path, mime_type: str) -> str:
 
 
 def credora_brand_html() -> str:
-    logo_uri = _asset_data_uri(ASSETS_DIR / "credora-dashboard-logo.png", "image/png")
+    namespace = "http://www.w3.org/2000/svg"
+    ElementTree.register_namespace("", namespace)
+    logo = ElementTree.parse(ASSETS_DIR / "credora-header-logo.svg").getroot()
+    for word in logo.findall(f"{{{namespace}}}text"):
+        logo.remove(word)
+    # Reuse the original glyphs, masking out the pink raster background.
+    artwork = _asset_data_uri(ASSETS_DIR / "login-hero.png", "image/png")
+    lettering = ElementTree.fromstring(f'''<svg xmlns="{namespace}" x="56" y="11" width="174" height="48" viewBox="200 185 310 85">
+      <defs><filter id="login-wordmark-ink" color-interpolation-filters="sRGB">
+        <feColorMatrix type="saturate" values="0"/>
+        <feComponentTransfer><feFuncR type="linear" slope="-5" intercept="3.5"/><feFuncG type="linear" slope="-5" intercept="3.5"/><feFuncB type="linear" slope="-5" intercept="3.5"/></feComponentTransfer>
+      </filter><mask id="login-wordmark-mask" maskUnits="userSpaceOnUse" x="200" y="185" width="310" height="85" style="mask-type:luminance">
+        <image href="{artwork}" width="1672" height="941" filter="url(#login-wordmark-ink)"/>
+      </mask></defs><rect x="200" y="185" width="310" height="85" fill="#111722" mask="url(#login-wordmark-mask)"/>
+    </svg>''')
+    logo.append(lettering)
+    encoded = base64.b64encode(ElementTree.tostring(logo, encoding="utf-8")).decode("ascii")
+    logo_uri = f"data:image/svg+xml;base64,{encoded}"
     return (
         "<div class='credora-brand'>"
         f"<img class='credora-brand-logo' src='{logo_uri}' alt='CREDORA Model Assurance'>"
@@ -644,7 +662,7 @@ def inject_credora_theme() -> None:
         }
         @media(max-width:1100px){.st-key-dashboard_topbar [data-testid="column"]:nth-child(1){display:none}.st-key-dashboard_topbar [data-testid="column"]:nth-child(2){min-width:58%!important}.st-key-dashboard_topbar [data-testid="column"]:nth-child(3){min-width:38%!important}}
 
-        /* Pixel-matched translation of the supplied landscape login reference. */
+        /* Balanced authentication layout shared by sign-in and registration. */
         @font-face {font-family: "Inter"; src: url("__INTER_300__") format("truetype"); font-style: normal; font-weight: 300; font-display: swap;}
         @font-face {font-family: "Inter"; src: url("__INTER_400__") format("truetype"); font-style: normal; font-weight: 400; font-display: swap;}
         @font-face {font-family: "Inter"; src: url("__INTER_500__") format("truetype"); font-style: normal; font-weight: 500; font-display: swap;}
@@ -656,23 +674,21 @@ def inject_credora_theme() -> None:
         .stApp:has(#credora-login-mode) *::after {box-sizing: border-box;}
         .stApp:has(#credora-login-mode) {
             width: 100vw;
-            height: 100vh;
-            min-width: 960px;
-            min-height: 600px;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow-x: hidden;
             background: #faf9f7;
         }
         .stApp:has(#credora-login-mode) header[data-testid="stHeader"],
         .stApp:has(#credora-login-mode) [data-testid="stSidebar"] {display: none;}
         .stApp:has(#credora-login-mode) [data-testid="stMain"] {
-            min-height: calc(100vh + 3.5rem);
-            margin-top: -3.5rem;
-            overflow: hidden;
+            min-height: 100vh;
+            margin-top: 0;
+            overflow-y: auto;
         }
         .stApp:has(#credora-login-mode) [data-testid="stMainBlockContainer"] {
             width: 100vw;
             max-width: none;
-            height: 100vh;
+            min-height: 100vh;
             padding: 0;
             margin: 0;
         }
@@ -720,27 +736,52 @@ def inject_credora_theme() -> None:
             border-radius: 0;
             box-shadow: none;
             background-image: url("__LOGIN_HERO__");
-            background-size: 90vw 100vh;
+            background-size: 176.4% 100%;
             background-position: left top;
             background-repeat: no-repeat;
         }
         .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"] > div:nth-child(2) > div {
             width: 100%;
-            max-width: 540px;
+            max-width: 640px;
             margin: auto;
         }
         .stApp:has(#credora-login-mode) [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"]:first-child #credora-auth-card) {
-            width: min(540px, 100%) !important;
-            max-width: 540px !important;
+            width: min(640px, 100%) !important;
+            max-width: 640px !important;
             flex: 0 0 auto !important;
             margin: auto !important;
-            padding: 48px !important;
+            padding: 44px !important;
             border: 1px solid rgba(245,245,244,.92) !important;
-            border-radius: 24px !important;
+            border-radius: 8px !important;
             background: #fff;
             box-shadow: 0 20px 40px -15px rgba(0,0,0,.05), 0 0 1px 1px rgba(0,0,0,.03);
         }
         .auth-heading {margin: 0 0 24px;}
+        .stApp:has(#credora-login-mode) [data-testid="stElementContainer"]:has(style),
+        .stApp:has(#credora-login-mode) [data-testid="stElementContainer"]:has(#credora-login-mode),
+        .stApp:has(#credora-login-mode) [data-testid="stElementContainer"]:has(#credora-auth-card) {display:none;}
+        .stApp:has(#credora-login-mode) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {gap:0;}
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) {
+            display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-height:100vh; gap:0; width:100%;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"] {
+            width:100% !important; min-width:0 !important; max-width:none; flex:none !important;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:last-child {
+            display:flex; flex-direction:column; justify-content:center; padding:32px; min-height:100vh;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:last-child > [data-testid="stVerticalBlock"] {height:auto !important; flex:0 0 auto; min-height:0;}
+        .stApp:has(#credora-login-mode) [data-testid="stForm"] [data-testid="stHorizontalBlock"] {display:grid; grid-template-columns:repeat(2,minmax(0,1fr));}
+        .stApp:has(#credora-login-mode) [data-testid="stForm"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {width:100% !important; flex:none !important; min-width:0;}
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:first-child {background:#fae4db;}
+        .st-key-auth_form_card {width:100% !important; max-width:640px !important; margin:auto !important;}
+        @media(max-width:760px) {
+            .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) {grid-template-columns:1fr;}
+            .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:last-child {min-height:auto; padding:24px 16px;}
+            .stApp:has(#credora-login-mode) .login-panel {height:260px; min-height:260px; background-size:176.4% auto;}
+            .stApp:has(#credora-login-mode) .st-key-auth_form_card {padding:28px 24px !important;}
+            .auth-heading h2 {font-size:28px !important;}
+        }
         .auth-heading h2 {
             margin: 0;
             color: #0f172a;
@@ -760,6 +801,26 @@ def inject_credora_theme() -> None:
         .stApp:has(#credora-auth-card) [data-testid="stForm"] {padding: 0; border: 0;}
         .stApp:has(#credora-auth-card) [data-testid="stForm"] > div {gap: 12px;}
         .stApp:has(#credora-auth-card) .stTextInput {margin: 0;}
+        .stApp:has(#credora-auth-card) .stTextInput [data-testid="stTextInputRootElement"] {
+            display:flex;
+            align-items:center;
+            height:52px;
+            min-height:52px;
+            overflow:hidden;
+            border:1px solid #d8dde4;
+            border-radius:8px;
+            background:#fff;
+            box-shadow:none;
+        }
+        .stApp:has(#credora-auth-card) .stTextInput [data-testid="stTextInputRootElement"]:focus-within {
+            border-color:#c96774;
+            background:#fff;
+            box-shadow:none;
+            outline:none;
+        }
+        .stApp:has(#credora-auth-card) [data-testid="InputInstructions"] {display:none !important;}
+        .stApp:has(#credora-auth-card) .stTextInput input::-ms-reveal,
+        .stApp:has(#credora-auth-card) .stTextInput input::-ms-clear {display:none;}
         .stApp:has(#credora-auth-card) .stTextInput label p,
         .stApp:has(#credora-auth-card) .stCheckbox label p {
             color: #334155;
@@ -770,8 +831,11 @@ def inject_credora_theme() -> None:
             min-height: 50px;
             padding-top: 12px;
             padding-bottom: 12px;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 8px !important;
+            height:50px;
+            border:0 !important;
+            border-radius:0 !important;
+            outline:none !important;
+            box-shadow:none !important;
             background: #fff !important;
             color: #0f172a;
             font-size: 14.5px;
@@ -802,6 +866,12 @@ def inject_credora_theme() -> None:
         .stApp:has(#credora-auth-card) button[aria-label="Hide password"] {
             width: 40px;
             min-width: 40px;
+            height:50px;
+            min-height:50px;
+            border:0 !important;
+            border-radius:0 !important;
+            background-color:#fff !important;
+            box-shadow:none !important;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.75'%3E%3Cpath d='M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -827,8 +897,9 @@ def inject_credora_theme() -> None:
             white-space: nowrap;
         }
         .stApp:has(#credora-auth-card) .stTextInput input:focus {
-            border-color: #932d32 !important;
-            box-shadow: 0 0 0 1px #932d32 !important;
+            border:0 !important;
+            box-shadow:none !important;
+            outline:none !important;
         }
         .stApp:has(#credora-auth-card) .stCheckbox input:checked + div {
             border-color: #932d32 !important;
@@ -925,6 +996,350 @@ def inject_credora_theme() -> None:
             .readiness-main {grid-template-columns: 1fr;}
             .approval {text-align: left;}
             .readiness-checks {grid-template-columns: 1fr;}
+        }
+
+        /* Compact top navigation replaces the sidebar. */
+        .stApp:not(:has(#credora-login-mode)) {
+            background: #fbf8f5;
+        }
+        .stApp:not(:has(#credora-login-mode)) [data-testid="stVerticalBlockBorderWrapper"],
+        .stApp:has(#credora-overview-mode) [data-testid="stVerticalBlockBorderWrapper"],
+        .overview-metric, .model-summary-card, .overview-table-card, .threat-posture {
+            background: #fffdfb !important;
+            border: 1px solid #eadbd4 !important;
+            box-shadow: 0 3px 12px rgba(89,52,48,.04) !important;
+        }
+        [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {display:none !important;}
+        .st-key-dashboard_navigation {padding-bottom:14px; border-bottom:1px solid #eadbd4;}
+        .st-key-dashboard_navigation .credora-brand {width:205px; max-width:100%; margin:0; padding:0;}
+        .st-key-icon_navigation {gap:6px !important; flex-wrap:wrap;}
+        .st-key-icon_navigation button {height:40px; min-height:40px; padding:0 !important; border-radius:6px;}
+        .st-key-icon_navigation button p {font-size:0 !important; width:0; overflow:hidden;}
+        .st-key-icon_navigation button [data-testid="stIconMaterial"] {font-size:21px; margin:0;}
+        .st-key-icon_navigation button[kind="tertiary"] {color:#716867; background:transparent;}
+        .st-key-icon_navigation button[kind="primary"] {background:#f3d8d2; border:1px solid #e7bfb8; color:#a23438;}
+        .st-key-icon_navigation button:hover {background:#f8e8e2; color:#a23438;}
+        .st-key-assessment_context {padding-top:4px;}
+        .st-key-account_menu {max-width:220px; margin-left:auto;}
+        .stApp:not(:has(#credora-login-mode)) [data-testid="stMainBlockContainer"] {max-width:1700px; margin:0 auto; padding-top:1.3rem;}
+        .st-key-dashboard_navigation .credora-brand-logo {display:block; width:100%; max-width:205px; height:auto; object-fit:contain;}
+        @media(max-width:720px) {
+            .st-key-dashboard_navigation > [data-testid="stHorizontalBlock"] {flex-wrap:wrap;}
+            .st-key-dashboard_navigation [data-testid="stColumn"] {width:100% !important; flex:1 1 100% !important;}
+            .st-key-icon_navigation {justify-content:flex-start !important;}
+        }
+        .stButton button, .stDownloadButton button {
+            transition: background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+        }
+        .stButton button:hover, .stDownloadButton button:hover {box-shadow: 0 4px 14px rgba(162,52,56,.12), inset 0 1px 0 rgba(255,255,255,.35);}
+        .stButton button:active, .stDownloadButton button:active {transform: translateY(1px);}
+        .overview-metric {transition: box-shadow .2s ease;}
+        .overview-metric:hover {box-shadow: 0 10px 28px rgba(89,52,48,.1), inset 0 1px 0 #fff;}
+        @media (prefers-reduced-motion: reduce) {
+            .stButton button, .stDownloadButton button, .overview-metric {transition: none; transform: none;}
+        }
+        /* Landscape dashboard reference: one header and a compact results grid. */
+        /* Detail pages use rose accents without changing overview or upload styling. */
+        [data-testid="stElementContainer"]:has(#credora-detail-mode) {display:none;}
+        .stApp:has(#credora-detail-mode) {background:#fcf5f2;}
+        .stApp:has(#credora-detail-mode) .page-head {
+            margin:2px -32px 20px; padding:22px 32px 24px;
+            border-bottom:1px solid #edcec5;
+            background:linear-gradient(105deg,#f9e2da 0%,#fcefe9 64%,#f0c4bc 100%);
+        }
+        .stApp:has(#credora-detail-mode) .page-head h1 {
+            margin:0; padding:0 !important; color:#272025; font-size:28px; line-height:1.2;
+        }
+        .stApp:has(#credora-detail-mode) .page-head p {margin:8px 0 0; color:#69545a; line-height:1.5;}
+        .stApp:has(#credora-detail-mode) [data-testid="stMarkdownContainer"] h3 {
+            padding:10px 0 12px; color:#82383f; font-size:20px; line-height:1.3;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stMetric"] {
+            background:#fffaf7; border:1px solid #e9cfc6; border-top:3px solid #cc7775;
+            border-radius:7px; box-shadow:0 3px 12px rgba(112,48,56,.04);
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stMetricValue"] {color:#91343c;}
+        .stApp:has(#credora-detail-mode) [data-testid="stMetric"] {border-color:#e9cfc6 !important; border-top-color:#cc7775 !important;}
+        .stApp:has(#credora-detail-mode) [data-testid="stMetricLabel"] p {color:#6d5358 !important;}
+        .stApp:has(#credora-detail-mode) [data-testid="stDataFrame"] {
+            background:#fffdfb; border:1px solid #e1bcb3; border-top:3px solid #d89c94; border-radius:6px;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stVerticalBlockBorderWrapper"] {
+            border-color:#e7c6bc !important; background:#fffdfb !important;
+            box-shadow:0 3px 12px rgba(112,48,56,.035) !important;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stTabs"] [role="tablist"] {
+            background:#f8e4de; border-bottom:1px solid #e7c4bb; padding:4px 8px; gap:8px;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stTabs"] [role="tab"] {
+            padding:10px 14px; color:#6d5358; border-radius:5px 5px 0 0;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+            color:#982f38; background:#fff8f4; font-weight:600;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stTabs"] [data-baseweb="tab-highlight"] {background:#a23438;}
+        .stApp:has(#credora-detail-mode) [data-testid="stExpander"] {
+            border:1px solid #e3bfb4 !important; border-radius:6px !important; background:#fffaf7;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stExpander"] details > summary {
+            background:#f9e8e2; color:#70363e; border-left:3px solid #ce8781; border-radius:5px;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stForm"] {border-color:#e5c0b6; background:#fffaf7;}
+        .stApp:has(#credora-detail-mode) .stButton button[kind="secondary"],
+        .stApp:has(#credora-detail-mode) .stDownloadButton button[kind="secondary"] {
+            color:#94323c; border-color:#d99a92; background:#fff7f2;
+        }
+        .stApp:has(#credora-detail-mode) .stButton button[kind="secondary"]:hover,
+        .stApp:has(#credora-detail-mode) .stDownloadButton button[kind="secondary"]:hover {
+            background:#f8e0d8; border-color:#bd6c69;
+        }
+        .stApp:has(#credora-detail-mode) [data-testid="stTextInputRootElement"]:focus-within,
+        .stApp:has(#credora-detail-mode) [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within {
+            outline:2px solid #cf817b; outline-offset:2px;
+        }
+        .stApp:has(#credora-detail-mode) .threat-posture {background:#fff9f5 !important;}
+        @media(max-width:720px) {
+            .stApp:has(#credora-detail-mode) .page-head {margin:0 -16px 16px; padding:20px 16px;}
+            .stApp:has(#credora-detail-mode) [data-testid="stTabs"] [role="tablist"] {gap:2px;}
+            .stApp:has(#credora-detail-mode) [data-testid="stTabs"] [role="tab"] {padding:10px;}
+        }
+        .stApp:has(#credora-upload-mode) .page-head {
+            position:relative; padding:22px 16px 26px; margin:0 0 10px;
+            background:linear-gradient(115deg,#fbf8f5 45%,#f7e2dc 75%,#edb0a8);
+        }
+        .stApp:has(#credora-upload-mode) .page-head::after {
+            content:""; position:absolute; right:-32px; bottom:0; width:46%; height:110px;
+            border-radius:65% 25% 0 0; background:#df8e8830; pointer-events:none;
+        }
+        .stApp:has(#credora-upload-mode) .page-head h1 {font-size:28px; margin:0; padding:0;}
+        .stApp:has(#credora-upload-mode) .page-head p {font-size:16px; margin:8px 0 0; color:#5c6877;}
+        .st-key-upload_evidence {padding:18px 20px; gap:10px !important;}
+        .upload-step {display:flex; align-items:flex-start; gap:28px; margin:0; padding:10px 4px;}
+        .upload-step > span {display:grid; place-items:center; width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:#cf867c; color:white; font-size:20px;}
+        .upload-step h3 {padding:0 !important; margin:0 0 4px !important; font-size:18px; color:#17202b;}
+        .upload-step p {padding:0; margin:0; font-size:14px; color:#5c6877;}
+        .st-key-upload_evidence .stRadio {margin-left:64px; max-width:940px; margin-bottom:8px;}
+        .st-key-upload_evidence [role="radiogroup"] {display:grid; grid-template-columns:1fr 1fr; gap:24px;}
+        .st-key-upload_evidence label[data-testid="stRadioOption"] {
+            width:100%; min-height:72px; border:1px solid #e4dedb; border-radius:6px; padding:12px 20px; background:#fffdfb;
+        }
+        .st-key-upload_evidence label[data-testid="stRadioOption"]:has(input:checked) {border-color:#c75c60; background:#fcf0ed;}
+        .st-key-upload_evidence label[data-testid="stRadioOption"] p {font-size:14px;}
+        .st-key-upload_evidence label[data-testid="stRadioOption"] [data-testid="stIconMaterial"] {font-size:28px; color:#a23438; padding:10px; background:#f8e7e2; border-radius:6px; margin:0 16px;}
+        .st-key-upload_evidence label[data-testid="stRadioOption"] p::after {display:block; font-size:13px; color:#5c6877; font-weight:400; margin:4px 0 0 64px;}
+        .st-key-sidebar_assessment_source label:nth-child(1) p::after {content:"Provide your own model and files";}
+        .st-key-sidebar_assessment_source label:nth-child(2) p::after {content:"Use a sample model for testing";}
+        .st-key-assessment_input_type label:nth-child(1) p::after {content:"Structured network flow data";}
+        .st-key-assessment_input_type label:nth-child(2) p::after {content:"Sequential tokens or bytes";}
+        .st-key-upload_evidence [class*="st-key-upload_row_"] {margin-left:64px; width:calc(100% - 64px); border:1px solid #e4dedb; border-radius:6px; padding:6px 14px; min-height:54px; gap:0;}
+        .st-key-upload_evidence [class*="st-key-upload_row_"] [data-testid="stVerticalBlock"] {gap:0;}
+        .st-key-upload_evidence [class*="st-key-upload_row_"] p {margin:0; font-size:13px;}
+        .st-key-upload_evidence [class*="st-key-upload_row_"] [data-testid="stIconMaterial"] {font-size:24px; padding:7px; margin-right:18px; background:#fbf1ed; border-radius:5px;}
+        .st-key-upload_evidence [class*="st-key-upload_row_"] [data-testid="stCaptionContainer"] p {font-size:12px; color:#657080;}
+        .st-key-upload_evidence [class*="st-key-upload_row_"] [data-testid="stColumn"]:first-child [data-testid="stCaptionContainer"] {margin-left:58px;}
+        .st-key-upload_evidence [data-testid="stFileUploaderDropzone"] {padding:0; border:0; background:transparent; min-height:40px;}
+        .st-key-upload_evidence [data-testid="stFileUploaderDropzoneInstructions"] {display:none;}
+        .st-key-upload_evidence [data-testid="stFileUploaderDropzone"] button {height:40px; min-height:40px; width:100%; border:1px solid #b6353d; border-radius:5px; color:#a23438; background:#fffdfb;}
+        .st-key-upload_evidence [data-testid="stFileUploaderDropzone"] button p {font-size:0;}
+        .st-key-upload_evidence [data-testid="stFileUploaderDropzone"] button p::after {content:"Upload"; font-size:14px;}
+        .st-key-sidebar_run_scan button {margin-top:12px; height:44px; border-radius:6px; background:#b6353d;}
+        [data-testid="stElementContainer"]:has(#credora-upload-mode) {display:none;}
+        .st-key-upload_evidence {background:#fffdfb;}
+        .upload-step-2,.upload-step-3 {border-top:1px solid #eee5e0; padding-top:14px;}
+        .st-key-sidebar_assessment_source,.st-key-assessment_input_type {width:calc(100% - 64px) !important; max-width:940px; margin-left:64px;}
+        .st-key-upload_evidence .stRadio {width:100%; max-width:none; margin-left:0;}
+        .st-key-upload_evidence [role="radiogroup"] {width:100%;}
+        .st-key-upload_evidence label[data-testid="stRadioOption"] p {position:relative; padding-left:64px; min-height:48px; display:flex; flex-direction:column; justify-content:center;}
+        .st-key-upload_evidence label[data-testid="stRadioOption"] p span[role="img"] {
+            position:absolute; left:0; top:0; display:grid !important; place-items:center;
+            width:48px; height:48px; font-size:28px; color:#a23438; background:#f8e7e2; border-radius:6px;
+        }
+        .st-key-upload_evidence label[data-testid="stRadioOption"] p::after {margin:5px 0 0;}
+        .upload-file-detail {display:flex; align-items:center; gap:24px; min-height:40px;}
+        .upload-file-icon {display:grid; place-items:center; flex:0 0 38px; width:38px; height:38px; font-family:"Material Symbols Rounded"; font-size:24px; background:#fbf1ed; border-radius:5px;}
+        .upload-file-detail strong {font-size:14px; color:#18202c;}
+        .upload-file-detail p {font-size:13px !important; color:#657080; line-height:1.35; margin:3px 0 0 !important;}
+        .upload-file-detail > div {display:flex; flex-direction:column; gap:3px;}
+        .upload-file-detail strong {display:block; line-height:18px;}
+        .upload-file-detail p {margin:0 !important; line-height:16px !important;}
+        .stApp:has(#credora-upload-mode) .page-head::after {
+            width:55%; height:128px; border-radius:0; background:transparent;
+            background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 128' preserveAspectRatio='none'%3E%3Cpath fill='%23e5aba330' d='M0 128C110 110 155 0 285 10S480 160 800 0V128Z'/%3E%3Cpath fill='%23da857e38' d='M190 128C300 70 345 30 445 67S620 140 800 60V128Z'/%3E%3C/svg%3E");
+            background-size:100% 100%;
+        }
+        @media(max-width:720px) {
+            .st-key-upload_evidence {padding:12px;}
+            .upload-step {gap:12px;}
+            .st-key-upload_evidence .stRadio {margin-left:0;}
+            .st-key-sidebar_assessment_source,.st-key-assessment_input_type {width:100% !important; margin-left:0;}
+            .st-key-upload_evidence [role="radiogroup"] {grid-template-columns:1fr; gap:10px;}
+            .st-key-upload_evidence [class*="st-key-upload_row_"] {margin-left:0; width:100%; padding:10px;}
+            .st-key-upload_evidence [class*="st-key-upload_row_"] [data-testid="stColumn"] {width:100% !important; flex:1 1 100% !important;}
+            .stApp:has(#credora-upload-mode) .page-head {padding:16px 0;}
+        }
+        .stApp:not(:has(#credora-login-mode)) [data-testid="stElementContainer"]:has(style) {display:none;}
+        .stApp:not(:has(#credora-login-mode)) [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {gap:12px;}
+        .stApp:not(:has(#credora-login-mode)) header[data-testid="stHeader"] {display:none;}
+        .stApp:not(:has(#credora-login-mode)) [data-testid="stMainBlockContainer"] {
+            width:100%; max-width:1360px; padding:0 24px 28px; margin:0 auto;
+        }
+        .st-key-dashboard_topbar {width:calc(100% + 48px) !important; min-height:60px; margin:0 -24px; padding:8px 24px; border-bottom:1px solid #e8ded9;}
+        .st-key-dashboard_topbar > [data-testid="stElementContainer"]:has(#credora-overview-mode) {display:none;}
+        .st-key-dashboard_topbar [data-testid="stHorizontalBlock"] {min-height:44px; gap:14px;}
+        .st-key-dashboard_topbar .credora-brand {width:205px; min-height:0; margin:0; padding:0;}
+        .st-key-dashboard_topbar .credora-brand-logo {display:block; width:100%; height:auto; object-fit:contain; mix-blend-mode:multiply;}
+        .st-key-dashboard_topbar .credora-brand {width:180px; max-width:100%;}
+        .st-key-icon_navigation {justify-content:flex-start !important; gap:8px !important;}
+        .st-key-icon_navigation button {height:40px; min-height:40px; border-radius:6px; border:0; box-shadow:none;}
+        .st-key-icon_navigation button [data-testid="stIconMaterial"] {font-size:22px; color:#19202b;}
+        .st-key-icon_navigation button[kind="primary"] {background:#fbe7e2; border:0;}
+        .st-key-icon_navigation button[kind="primary"] [data-testid="stIconMaterial"] {color:#ae2029;}
+        .st-key-account_menu {margin:0; max-width:none;}
+        .st-key-account_menu > div [data-testid="stPopover"] > button {
+            border:0; border-left:1px solid #eadbd4; border-radius:0; padding:0 12px; background:transparent;
+        }
+        .st-key-account_menu [data-testid="stPopover"] > button p {
+            display:grid; place-items:center; width:34px; height:34px; flex:0 0 34px;
+            border-radius:50%; background:#efdad5; color:#201a1a; font-weight:600;
+        }
+        .st-key-dashboard_topbar .st-key-account_menu [data-testid="stPopover"] button p {
+            display:grid; place-items:center; width:34px; height:34px; flex:0 0 34px;
+            border-radius:50%; background:#efdad5; color:#201a1a; font-size:14px;
+        }
+        .st-key-dashboard_search input {font-size:13px !important;}
+        .st-key-readiness_banner {
+            position:relative; overflow:hidden; min-height:132px; padding:18px 24px;
+            border:1px solid #efddd5; border-radius:8px;
+            background:linear-gradient(105deg,#fcece5,#f8ded5 65%,#e58b88);
+        }
+        .st-key-readiness_banner::after {
+            content:""; position:absolute; right:-60px; bottom:-120px; width:600px; height:235px;
+            border-radius:50%; background:rgba(174,45,54,.13); transform:rotate(-13deg); pointer-events:none;
+        }
+        .st-key-readiness_banner > div {position:relative; z-index:1;}
+        .readiness-copy {padding-right:24px;}
+        .overview-eyebrow {font-size:12px; letter-spacing:0; color:#445061;}
+        .readiness-copy h2 {font-size:28px; line-height:1.15; margin:8px 0;}
+        .readiness-copy h2 {padding:0 !important; margin:8px 0 !important;}
+        .readiness-copy p {padding:0 !important; margin:0 !important;}
+        .overview-card-head h3 {padding:0 !important; margin:0 !important; line-height:1.25;}
+        .st-key-overview_drift {height:244px; padding:14px 20px 6px; gap:6px !important;}
+        .st-key-overview_drift [data-testid="stPlotlyChart"] {margin:0 !important;}
+        .chart-legend {font-size:12px; margin:0;}
+        .readiness-copy p {font-size:15px; max-width:540px; line-height:1.4; color:#4e5b70;}
+        .overview-checks {padding-left:24px; gap:8px;}
+        .overview-checks .readiness-check {font-size:13px; color:#344259;}
+        .overview-checks .readiness-check b {width:20px; height:20px; font-size:12px; background:#00785b;}
+        .st-key-readiness_banner button {height:40px; border-radius:6px; background:#ad2931; font-size:14px;}
+        .overview-metrics {gap:12px; margin-bottom:12px;}
+        .overview-metric {min-height:168px; border-radius:8px; padding:16px 16px 0;}
+        .metric-label {font-size:12px; letter-spacing:0; color:#344259;}
+        .metric-label .ui-icon {width:19px; height:19px;}
+        .metric-core {gap:14px; margin-top:12px;}
+        .metric-round {width:48px; height:48px;}
+        .metric-round .ui-icon {width:28px; height:28px;}
+        .metric-round .material-symbols-rounded {display:block; font-size:28px;}
+        .metric-core strong {font-size:26px;}
+        .metric-core strong small {font-size:13px; color:#344259; font-weight:400;}
+        .metric-core p {font-size:13px; line-height:1.4; margin-top:6px; color:#344259;}
+        .metric-spark {height:55px; left:20px; right:20px; width:calc(100% - 40px); bottom:8px;}
+        .tier-content {grid-template-columns:100px 1fr; gap:12px; margin-top:12px;}
+        .overview-tier-ring {width:100px; height:100px;}
+        .overview-tier-ring::before {width:68px; height:68px;}
+        .overview-tier-ring b {font-size:26px;}
+        .overview-tier-ring small {font-size:12px; letter-spacing:0;}
+        .tier-legend p {font-size:12px; color:#344259; margin-bottom:10px;}
+        .tier-legend strong {font-size:11px;}
+        .overview-card-head h3 {font-size:18px; color:#13171c;}
+        .stApp:has(#credora-overview-mode) [data-testid="stVerticalBlockBorderWrapper"]:has(#overview-drift-card) {
+            height:244px; padding:14px 20px 6px !important; margin-bottom:0; border-radius:8px !important;
+        }
+        .model-summary-card {height:244px; border-radius:8px; padding:14px 20px;}
+        .model-summary-card {margin-bottom:12px;}
+        .summary-item {min-height:62px; padding:8px 10px; grid-template-columns:42px 1fr;}
+        .summary-item small {font-size:12px; color:#647086;}
+        .summary-item strong {font-size:14px; font-weight:400; color:#263751;}
+        .summary-item .ui-icon {width:22px; height:22px;}
+        .overview-table-card {height:206px; padding:14px 20px; border-radius:8px;}
+        .overview-table-card {height:auto; min-height:206px;}
+        .overview-table-head, .alert-table-head {font-size:10px; letter-spacing:0;}
+        .overview-table-row {font-size:12px; min-height:32px;}
+        .overview-table-row strong {font-size:12px;}
+        .alert-table-row {font-size:11px; min-height:32px;}
+        .alert-table-row strong {font-size:11px;}
+        .status-chip, .severity-chip, .status-pill {
+            background:transparent !important; border:0; border-radius:0;
+            box-shadow:none; padding:0; font-style:normal; font-weight:600; line-height:1.5;
+        }
+        .status-chip, .severity-chip {font-size:13px;}
+        .module-row {display:grid; grid-template-columns:minmax(0,1fr) 110px; align-items:center; gap:24px; padding:16px 0; border-bottom:1px solid var(--border);}
+        .module-row:last-child {border-bottom:0;}
+        .module-title {font-size:15px; font-weight:600; color:var(--text);}
+        .module-summary {font-size:14px; line-height:1.5; color:var(--muted-strong); margin-top:4px; overflow-wrap:anywhere;}
+        .module-row > div:last-child {text-align:right;}
+        .module-score {font-size:14px; color:var(--muted-strong); margin-top:4px;}
+        .assurance-head {display:flex; align-items:center; justify-content:space-between; gap:12px;}
+        .assurance-head h3 {font-size:20px; margin:0; padding:0;}
+        .assurance-head p {font-size:14px; color:var(--muted-strong); margin:6px 0 16px;}
+        .assurance-control {color:var(--muted);}
+        .assurance-tier {font-size:16px; font-weight:600; color:var(--primary);}
+        .assurance-status {font-size:14px; margin-top:6px;}
+        .assurance-bars {display:grid; gap:16px; margin-top:24px;}
+        .assurance-bars > div {display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; font-size:14px;}
+        .assurance-bars b {font-weight:600; white-space:nowrap;}
+        .assurance-bars i {display:block; grid-column:1 / -1; height:4px; max-width:100%; background:var(--primary);}
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:last-child {
+            padding:48px 8%;
+        }
+        .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:last-child > div {
+            width:100%; max-width:none;
+        }
+        .stApp:has(#credora-login-mode) .st-key-auth_form_card,
+        .stApp:has(#credora-login-mode) [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"]:first-child #credora-auth-card) {
+            width:100% !important; max-width:600px !important; padding:36px !important;
+        }
+        .stApp:has(#credora-detail-mode) .page-head {margin:2px -24px 16px; padding:16px 24px 18px;}
+        .stApp:has(#credora-detail-mode) .page-head h1 {font-size:26px;}
+        .stApp:has(#credora-detail-mode) [data-testid="stMarkdownContainer"] h3 {font-size:18px;}
+        .stApp:has(#credora-upload-mode) .page-head {padding:22px 16px; min-height:104px;}
+        .stApp:has(#credora-upload-mode) .page-head h1 {font-size:26px;}
+        .stApp:not(:has(#credora-login-mode)) [data-testid="stMetricValue"] {font-size:26px;}
+        .stApp:has(#credora-overview-mode) [data-testid="stElementContainer"]:has(#overview-model-action) + [data-testid="stElementContainer"] button,
+        .stApp:has(#credora-overview-mode) [data-testid="stElementContainer"]:has(#overview-assessments-action) + [data-testid="stElementContainer"] button,
+        .stApp:has(#credora-overview-mode) [data-testid="stElementContainer"]:has(#overview-alerts-action) + [data-testid="stElementContainer"] button {font-size:12px;}
+        @media(max-width:1400px) {
+            .st-key-icon_navigation > [data-testid="stLayoutWrapper"] {max-width:48px;}
+            .metric-core {gap:14px;}
+            .metric-round {width:48px; height:48px;}
+            .metric-core strong {font-size:26px;}
+            .metric-core p {font-size:12px;}
+            .tier-content {gap:10px; grid-template-columns:104px 1fr;}
+            .overview-tier-ring {width:104px; height:104px;}
+            .overview-tier-ring::before {width:72px; height:72px;}
+        }
+        @media(max-width:1050px) {
+            .st-key-dashboard_topbar > div > [data-testid="stHorizontalBlock"] {flex-wrap:wrap;}
+            .st-key-dashboard_topbar [data-testid="stColumn"] {min-width:140px; flex:1 1 auto;}
+            .st-key-dashboard_topbar [data-testid="stColumn"]:nth-child(2) {min-width:420px;}
+            .overview-metrics {grid-template-columns:repeat(2,minmax(0,1fr));}
+            .readiness-copy h2 {font-size:28px;}
+            .readiness-copy p {font-size:14px;}
+        }
+        @media(max-width:720px) {
+            .module-row {grid-template-columns:minmax(0,1fr) 80px; gap:12px;}
+            .stApp:has(#credora-login-mode) [data-testid="stHorizontalBlock"]:has(.login-panel) > [data-testid="stColumn"]:last-child {padding:24px 16px;}
+            .stApp:has(#credora-login-mode) .st-key-auth_form_card {padding:28px 24px !important;}
+            .stApp:not(:has(#credora-login-mode)) [data-testid="stMainBlockContainer"] {padding:0 16px 20px;}
+            .st-key-dashboard_topbar {margin:0 -16px 12px; padding:10px 16px;}
+            .st-key-dashboard_topbar [data-testid="stColumn"]:nth-child(2) {min-width:100%;}
+            .st-key-readiness_banner {padding:20px;}
+            .readiness-copy {border:0; padding:0;}
+            .overview-checks {padding:12px 0;}
+            .overview-metrics {grid-template-columns:1fr;}
+            .overview-table-card, .model-summary-card {height:auto; min-height:206px; overflow-x:auto;}
+            .overview-table-head, .overview-table-row {min-width:650px;}
+            .alert-table-head, .alert-table-row {min-width:450px;}
         }
             """,
         )

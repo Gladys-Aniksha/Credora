@@ -1,0 +1,70 @@
+[
+  {
+    "variant": "credora_doh_strong",
+    "backend": "OnnxBackend",
+    "prediction_shape": [
+      900
+    ],
+    "probability_shape": [
+      900,
+      3
+    ],
+    "module_scores": {
+      "classifier_evaluation": 94.54,
+      "robustness_testing": 91.69,
+      "data_drift_detection": 99.19,
+      "explainability": 100.0,
+      "behavior_analysis": 82.0,
+      "adversarial_validation": 50.86
+    },
+    "module_statuses": {
+      "classifier_evaluation": "pass",
+      "robustness_testing": "pass",
+      "data_drift_detection": "pass",
+      "explainability": "pass",
+      "behavior_analysis": "pass",
+      "adversarial_validation": "fail"
+    },
+    "test_accuracy": 0.9456,
+    "weighted_diagnostic_score": 85.97,
+    "official_trust_score_issued": false,
+    "score_context": "The weighted score is calculated for assessment and drift tracking. The unsigned model still fails the Security Gate and is blocked from deployment.",
+    "sensitive_labels": [],
+    "sensitive_label_detected": false,
+    "explainability_method": "shap"
+  },
+  {
+    "variant": "credora_doh_weak",
+    "backend": "OnnxBackend",
+    "prediction_shape": [
+      600
+    ],
+    "probability_shape": [
+      600,
+      3
+    ],
+    "module_scores": {
+      "classifier_evaluation": 52.51,
+      "robustness_testing": 99.26,
+      "data_drift_detection": 98.94,
+      "explainability": 60.0,
+      "behavior_analysis": 44.0,
+      "adversarial_validation": 71.21
+    },
+    "module_statuses": {
+      "classifier_evaluation": "fail",
+      "robustness_testing": "pass",
+      "data_drift_detection": "pass",
+      "explainability": "warning",
+      "behavior_analysis": "fail",
+      "adversarial_validation": "warning"
+    },
+    "test_accuracy": 0.655,
+    "weighted_diagnostic_score": 68.89,
+    "official_trust_score_issued": false,
+    "score_context": "The weighted score is calculated for assessment and drift tracking. The unsigned model still fails the Security Gate and is blocked from deployment.",
+    "sensitive_labels": [],
+    "sensitive_label_detected": false,
+    "explainability_method": "shap"
+  }
+]

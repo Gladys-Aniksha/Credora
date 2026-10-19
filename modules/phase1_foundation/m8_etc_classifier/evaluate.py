@@ -138,5 +138,9 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
             "confusion_pairs": confusion_pairs[:10],
             "input_type": input_type,
             "sequence_compatibility": compatibility,
+            "execution": getattr(model, "execution_details", {
+                "execution_device": "cpu", "execution_observation": "framework_cpu",
+                "strict_gpu_guarantee": False,
+            }),
         },
     )

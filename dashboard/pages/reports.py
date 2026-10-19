@@ -27,6 +27,17 @@ def render_reports_page(
 ) -> None:
     render_page_head("Reports", "Deployment evidence, exported assessments, and recommended actions")
     report_phase = "phase3" if deployment_gate else "phase2"
+    if report_data.get("execution") or report_data.get("input_provenance"):
+        with st.expander("Execution and input provenance", icon=":material/memory:"):
+            evidence = report_data.get("execution", {})
+            if evidence:
+                st.write(f"Requested device: **{str(evidence.get('execution_device', 'cpu')).upper()}**")
+                st.write("Observed execution: " + str(evidence.get("execution_observation", "unavailable")))
+                if evidence.get("fallback_reason"):
+                    st.warning(str(evidence["fallback_reason"]))
+                st.json(evidence)
+            if report_data.get("input_provenance"):
+                st.json(report_data["input_provenance"])
     safe_model_name = slugify_filename(model_name)
     report_path = ensure_within_directory(
         REPORT_DIR / str(current_user["id"]) / f"{safe_model_name}_{report_phase}_trust_report.json",

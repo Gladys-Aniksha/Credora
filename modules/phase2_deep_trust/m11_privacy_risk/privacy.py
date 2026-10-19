@@ -77,7 +77,7 @@ def assess_privacy_risk(model_path: str | Path, dataset_path: str | Path, metada
         return ModuleResult("privacy_risk", "pass" if score >= 80 else "warning" if score >= 55 else "fail", round(max(score, 0.0), 2), f"Compared sequence confidence on {len(train.features[:1000])} training and {len(test.features[:1000])} holdout rows.", findings, {"input_type": "sequence", "training_dataset_available": True, "confidence_available": True, "training_dataset_path": str(train_path), "train_mean_confidence": round(train_mean, 4), "test_mean_confidence": round(test_mean, 4), "confidence_gap": round(confidence_gap, 4), "train_high_confidence_rate": round(train_high, 4), "test_high_confidence_rate": round(test_high, 4), "high_confidence_gap": round(high_confidence_gap, 4)})
 
     try:
-        model = load_model_backend(model_path)
+        model = load_model_backend(model_path, metadata)
         train = pd.read_csv(train_path)
         test = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001

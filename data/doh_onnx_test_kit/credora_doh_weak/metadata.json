@@ -1,0 +1,42 @@
+{
+  "model_name": "credora_doh_weak",
+  "version": "1.0",
+  "algorithm": "XGBoost",
+  "framework": "ONNX (onnxmltools XGBoost converter)",
+  "task": "DNS-over-HTTPS Tunnel Detection",
+  "input_type": "tabular",
+  "target_column": "label",
+  "training_dataset_path": "data/doh_onnx_test_kit/credora_doh_weak/train.csv",
+  "expected_features": [
+    "duration",
+    "bytes_sent",
+    "bytes_received",
+    "send_rate",
+    "receive_rate",
+    "packet_length_mean",
+    "packet_length_median",
+    "packet_length_mode",
+    "packet_length_variance",
+    "packet_length_std",
+    "packet_length_skew_from_median",
+    "packet_length_skew_from_mode",
+    "packet_length_coefficient_of_variation",
+    "packet_timing_mean",
+    "packet_timing_median",
+    "packet_timing_mode",
+    "packet_timing_variance",
+    "packet_timing_std",
+    "packet_timing_skew_from_median",
+    "packet_timing_skew_from_mode",
+    "packet_timing_coefficient_of_variation"
+  ],
+  "class_labels": [
+    "Benign-HTTPS",
+    "Benign-DoH",
+    "Malicious-DoH-Tunnel"
+  ],
+  "signature_status": "unverified",
+  "synthetic_data": true,
+  "measured_test_accuracy": 0.655,
+  "measured_train_test_accuracy_gap": 0.002222
+}

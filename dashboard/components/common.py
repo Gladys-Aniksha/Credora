@@ -5,9 +5,24 @@ from html import escape
 
 import streamlit as st
 
+from core.score_evidence import trust_score_evidence
+
 
 def h(value: object) -> str:
     return escape(str(value))
+
+
+def render_score_evidence(report: dict) -> None:
+    evidence = trust_score_evidence(report)
+    if not evidence["cap_applied"] or evidence["published_score"] is None:
+        return
+    measured = evidence["measured_score"]
+    measured_text = f"Measured assessment score: {measured:.2f}/100. " if measured is not None else ""
+    st.caption(
+        f"{measured_text}Trust Score: {evidence['published_score']:.2f}/100, "
+        f"limited by the unsigned-model cap of {evidence['cap']:.0f}. "
+        "This score does not approve deployment; failed Security Gates still block it."
+    )
 
 
 def module_label(module: str) -> str:

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import ast
+from xml.etree import ElementTree
 from pathlib import Path
 
 from dashboard.components.overview import _metric_series, build_metric_histories
-from dashboard.components.topbar import build_search_results
+from dashboard.components.topbar import PAGE_ICONS, build_search_results
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_ROOT = PROJECT_ROOT / "dashboard"
@@ -90,10 +91,14 @@ def test_login_uses_local_reference_artwork_and_streamlit_auth_controls() -> Non
     assert '[class*=\"material-symbols\"]' in theme_source
     assert "width: 50% !important" in theme_source
     assert "flex: 0 0 50% !important" in theme_source
-    assert "background-size: 90vw 100vh" in theme_source
-    assert "max-width: 540px" in theme_source
-    assert "st.form(\"credora-login\")" in auth_source
-    assert "st.form(\"credora-register\")" in auth_source
+    assert "background-size: 176.4% 100%" in theme_source
+    assert "max-width: 640px" in theme_source
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in theme_source
+    assert 'key="auth_form_card"' in auth_source
+    assert '[data-testid="InputInstructions"] {display:none !important;}' in theme_source
+    assert '[data-testid="stTextInputRootElement"]:focus-within' in theme_source
+    assert 'st.form("credora-login", enter_to_submit=False)' in auth_source
+    assert 'st.form("credora-register", enter_to_submit=False)' in auth_source
     assert ":material/" not in auth_source
     assert "st.tabs" not in auth_source
 
@@ -159,22 +164,52 @@ def test_dashboard_search_profile_and_upload_are_functional() -> None:
     assert 'key="profile_logout"' in topbar_source
 
 
-def test_sidebar_brand_and_fixed_layout_contract() -> None:
+def test_top_navigation_brand_and_layout_contract() -> None:
     app_source = (DASHBOARD_ROOT / "app.py").read_text(encoding="utf-8")
     theme_source = (DASHBOARD_ROOT / "theme.py").read_text(encoding="utf-8")
 
-    assert "credora_brand_html()" in app_source
+    topbar_source = (DASHBOARD_ROOT / "components" / "topbar.py").read_text(encoding="utf-8")
+    assert "credora_brand_html()" in topbar_source
     assert "sidebar_open_alert_count" in app_source
     assert "credora-brand-logo" in theme_source
-    assert "credora-dashboard-logo.png" in theme_source
+    assert "credora-header-logo.svg" in theme_source
     assert "alt='CREDORA Model Assurance'" in theme_source
     assert "max-width: 205px" in theme_source
     assert "width: 255px !important" in theme_source
     assert ".st-key-dashboard_page" in theme_source
     assert ".sidebar-wave-container" in theme_source
     assert "height: clamp(185px, 24vh, 240px)" in theme_source
-    assert "wave wave-back" in app_source
-    assert "sidebar-footer-copy" in app_source
+    assert "with st.sidebar" not in app_source
+    assert "render_icon_navigation(" in topbar_source
+    assert "navigation_options=navigation_options" in app_source
+    assert 'key="dashboard_topbar"' in topbar_source
+    assert ".st-key-icon_navigation" in theme_source
+    assert set(PAGE_ICONS) == {
+        "Overview", "Model Registry", "Upload Model", "Traffic Classifier",
+        "Trust Score", "Threat Model", "Trust Drift", "Reports", "Alerts", "Settings", "Admin",
+    }
+    assert len(set(PAGE_ICONS.values())) == len(PAGE_ICONS)
+
+
+def test_header_logo_preserves_wordmark_and_separate_folded_facets() -> None:
+    logo = ElementTree.parse(DASHBOARD_ROOT / "assets" / "credora-header-logo.svg").getroot()
+    ns = {"svg": "http://www.w3.org/2000/svg"}
+    symbol = logo.find("svg:g[@id='credora-c']", ns)
+    assert symbol is not None
+    facets = symbol.findall("svg:path", ns)
+    assert len(facets) == 6
+    assert len({facet.attrib["fill"] for facet in facets}) == 6
+    assert [text.text for text in logo.findall("svg:text", ns)] == ["CREDORA", "MODEL ASSURANCE"]
+    assert logo.attrib["viewBox"] == "0 0 240 64"
+
+
+def test_detail_page_accents_exclude_reference_pages() -> None:
+    app_source = (DASHBOARD_ROOT / "app.py").read_text(encoding="utf-8")
+    theme_source = (DASHBOARD_ROOT / "theme.py").read_text(encoding="utf-8")
+    assert 'if page not in {"Overview", "Upload Model"}:' in app_source
+    assert "id='credora-detail-mode'" in app_source
+    for surface in (".page-head", '[data-testid="stMetric"]', '[data-testid="stTabs"]', '[data-testid="stExpander"]'):
+        assert f".stApp:has(#credora-detail-mode) {surface}" in theme_source
 
 
 def test_dashboard_search_retrieves_models_assessments_and_reports() -> None:

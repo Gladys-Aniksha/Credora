@@ -64,7 +64,7 @@ def explain_model(model_path: str | Path, dataset_path: str | Path, metadata: di
         except Exception as exc:  # noqa: BLE001
             return ModuleResult("explainability", "warning", 60, "Sequence occlusion explanation could not run.", [Finding("explainability", "Sequence explanation unavailable", "medium", str(exc), "Use an ONNX sequence model with probability outputs and a compatible NPZ dataset.")], {"input_type": "sequence", "method": "not_available", "saliency": []})
     try:
-        model = load_model_backend(model_path)
+        model = load_model_backend(model_path, metadata)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("explainability", "fail", 0, "Explainability could not run.", [Finding("explainability", "Explainability failed", "high", str(exc), "Use a supported scikit-learn model with readable feature metadata.")])

@@ -1,0 +1,85 @@
+{
+  "model_name": "credora_sequence_weak",
+  "version": "2.0",
+  "algorithm": "Trained 1D-CNN",
+  "framework": "PyTorch exported to ONNX",
+  "task": "Synthetic motif classification",
+  "input_type": "sequence",
+  "max_sequence_length": 128,
+  "sequence_dtype": "int64",
+  "vocab_size": 256,
+  "pad_id": 0,
+  "class_labels": [
+    "Synthetic-A",
+    "Synthetic-B",
+    "Synthetic-C",
+    "Synthetic-D"
+  ],
+  "target_column": "label",
+  "training_dataset_path": "data/trained_sequence_test_kit/credora_sequence_weak/train.npz",
+  "training": {
+    "seed": 1729,
+    "epochs": 1,
+    "rows_used": 32,
+    "batch_size": 128,
+    "learning_rate": 0.003,
+    "optimizer": "Adam",
+    "torch_version": "2.10.0+cpu",
+    "device": "cpu",
+    "deterministic_algorithms": true,
+    "weakening": "one epoch on first 32 rows"
+  },
+  "architecture": "Embedding(256,16), Conv1d(16,32,4), ReLU, global max, Linear(32,4)",
+  "export": {
+    "opset": 15,
+    "external_data": false,
+    "method": "learned weights mapped to standard ONNX operators",
+    "pytorch_onnx_parity_checked": true
+  },
+  "dataset": {
+    "train_seed": 1739,
+    "test_seed": 1749,
+    "train_rows": 3072,
+    "test_rows": 768,
+    "motifs": [
+      [
+        240,
+        241,
+        242,
+        243
+      ],
+      [
+        241,
+        243,
+        240,
+        242
+      ],
+      [
+        242,
+        240,
+        243,
+        241
+      ],
+      [
+        243,
+        242,
+        241,
+        240
+      ]
+    ],
+    "offsets": "uniform, inclusive 0..124"
+  },
+  "test_metrics": {
+    "accuracy": 0.24479166666666666,
+    "weighted_f1": 0.18526129833179886
+  },
+  "occlusion_sample": {
+    "sample_index": 0,
+    "motif_start": 84,
+    "motif_length": 4,
+    "peak_position": 1,
+    "peak_probability_drop": 0.019007623195648193,
+    "peak_in_motif": false
+  },
+  "fixture_note": "Trained on artificial ordered token motifs with random background. Not network captures; classes are synthetic and metrics do not establish real traffic detection, privacy, or robustness. Seeds reproduce CPU builds within the same dependency environment; cross-version bitwise identity is not guaranteed."
+}

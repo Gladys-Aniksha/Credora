@@ -38,7 +38,7 @@ reportlab
 # Testing
 pytest
 python-docx
-passlib[bcrypt]
+# New hashes use versioned PBKDF2; bcrypt verifies existing account hashes.
 bcrypt>=4.0.1,<5
 python-jose[cryptography]
 slowapi

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" role="img" aria-label="CREDORA Model Assurance">
+  <defs>
+    <linearGradient id="upper-fold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b84243"/><stop offset="1" stop-color="#9d3035"/></linearGradient>
+    <linearGradient id="lower-fold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c6605a"/><stop offset="1" stop-color="#aa373b"/></linearGradient>
+  </defs>
+  <g id="credora-c" aria-label="Faceted folded C">
+    <path fill="url(#upper-fold)" d="M10 21 28 3 28 19 19 28 10 37Z"/>
+    <path fill="#a33138" d="m28 3 11 10-8 9-3-3Z"/>
+    <path fill="#cb7970" d="m10 37 9-9v12l-9 7Z"/>
+    <path fill="#e0a294" d="m10 37 9 3-9 7Z"/>
+    <path fill="url(#lower-fold)" d="m10 47 9-7 9 9v14Z"/>
+    <path fill="#bb514c" d="m28 49 3-3 8 9-11 8Z"/>
+  </g>
+  <text x="56" y="35" fill="#111722" font-family="Arial, sans-serif" font-size="27" textLength="171" lengthAdjust="spacing">CREDORA</text>
+  <text x="57" y="52" fill="#26303d" font-family="Arial, sans-serif" font-size="10" textLength="171" lengthAdjust="spacing">MODEL ASSURANCE</text>
+</svg>

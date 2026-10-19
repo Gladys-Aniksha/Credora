@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -27,7 +26,7 @@ from core.db import (
     list_scan_reports,
     list_scans,
 )
-from dashboard.components.common import format_time, h, module_label, render_page_head
+from dashboard.components.common import format_time, h, module_label, render_page_head, render_score_evidence
 from dashboard.components.overview import (
     build_drift_figure,
     build_metric_histories,
@@ -39,9 +38,11 @@ from dashboard.components.overview import (
 from dashboard.components.overview import render_alerts as render_overview_alerts
 from dashboard.components.scan_submission import (
     execute_scan_submission,
+    render_saved_upload_assessment,
     render_scan_submission,
 )
 from dashboard.components.sequence_evidence import render_sequence_evidence
+from dashboard.components.assessment_motion import render_assessment_comparison
 from dashboard.components.topbar import render_dashboard_topbar
 from dashboard.pages.admin import render_admin_page
 from dashboard.pages.auth import require_dashboard_auth
@@ -51,10 +52,10 @@ from dashboard.pages.production_monitoring import (
 )
 from dashboard.pages.reports import render_reports_page
 from dashboard.pages.threat_model import render_threat_model_page
-from dashboard.theme import credora_brand_html, inject_credora_theme
+from dashboard.theme import inject_credora_theme
 
 
-st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="collapsed")
 
 TEAL = "#A23438"
 NAVY = "#201A1A"
@@ -154,32 +155,16 @@ def chart_layout(fig: go.Figure, height: int) -> go.Figure:
 
 
 
-def assurance_tier_html(score: float, status_text: str) -> str:
-    score = max(0.0, min(float(score), 100.0))
-    needle = -70 + (score * 1.4)
-    tier = "Tier 4: Enterprise Trusted" if score >= 85 else "Tier 3: Review Required" if score >= 70 else "Tier 2: High Risk" if score >= 50 else "Tier 1: Critical"
+def assurance_tier_html(score: object, status_text: str) -> str:
+    from dashboard.components.assurance_gauge import assurance_gauge_html
+
     return f"""
     <div class="assurance-panel">
       <div class="assurance-head">
         <div><h3>Assurance Tier Architecture</h3><p>Calibrated Trust Distribution Index</p></div>
         <span class="assurance-control">&#9881;</span>
       </div>
-      <div class="assurance-gauge">
-        <svg viewBox="0 0 240 145" role="img" aria-label="Trust score {score:.1f} out of 100">
-          <path class="gauge-track" pathLength="100" d="M40 120 A80 80 0 0 1 200 120" />
-          <path class="gauge-critical" pathLength="100" d="M40 120 A80 80 0 0 1 200 120" />
-          <path class="gauge-warning" pathLength="100" d="M40 120 A80 80 0 0 1 200 120" />
-          <path class="gauge-review" pathLength="100" d="M40 120 A80 80 0 0 1 200 120" />
-          <path class="gauge-trusted" pathLength="100" d="M40 120 A80 80 0 0 1 200 120" />
-          <g style="transform: rotate({needle:.1f}deg); transform-origin: 120px 120px;">
-            <line x1="120" y1="120" x2="120" y2="45" class="gauge-needle" />
-            <circle cx="120" cy="120" r="7" class="gauge-hub" />
-          </g>
-        </svg>
-        <div class="assurance-readout"><span>{score:.1f}</span><em>/ 100</em></div>
-        <div class="assurance-tier">&#10003; {h(tier)}</div>
-        <div class="assurance-status">{h(status_text)}</div>
-      </div>
+      {assurance_gauge_html(score, status_text)}
       <div class="assurance-bars">
         <div><span>Robustness &amp; Perturbation</span><b>{safe_score(adversarial.get('score')):.0f} / 100</b><i style="width:{safe_score(adversarial.get('score')):.0f}%"></i></div>
         <div><span>Classifier Reliability</span><b>{safe_score(classifier.get('score')):.0f} / 100</b><i style="width:{safe_score(classifier.get('score')):.0f}%"></i></div>
@@ -254,21 +239,8 @@ def dashboard_owner_scope() -> tuple[int | None, bool]:
 
 
 def resolve_report(selected_model: str | None) -> dict | None:
-    session_report = st.session_state.get("report")
-    if session_report and (not selected_model or session_report.get("model_name") == selected_model):
-        return session_report
     owner_id, include_all = dashboard_owner_scope()
-    if selected_model:
-        for scan in list_scans(limit=100, owner_id=owner_id, include_all=include_all):
-            if scan.get("model_name") != selected_model:
-                continue
-            report_path = Path(scan.get("report_path", ""))
-            if report_path.exists() and report_path.suffix.lower() == ".json":
-                try:
-                    return json.loads(report_path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    pass
-    return latest_scan(owner_id=owner_id, include_all=include_all)
+    return latest_scan(owner_id=owner_id, include_all=include_all, model_name=selected_model)
 
 
 def update_setting(setting_key: str, control_key: str) -> None:
@@ -282,11 +254,6 @@ def navigate_dashboard_page(page_name: str) -> None:
     st.session_state["dashboard_page"] = page_name
     st.session_state["dashboard_query_page"] = page_name
     st.query_params["page"] = page_name
-
-
-def sync_dashboard_page() -> None:
-    selected = st.session_state.get("dashboard_page", "Overview")
-    navigate_dashboard_page(selected)
 
 
 navigation_options = [
@@ -312,49 +279,19 @@ sidebar_open_alert_count = len(
     list_runtime_alerts(limit=100, status="open", owner_id=owner_id, include_all=include_all)
 )
 
-with st.sidebar:
-    st.markdown(
-        credora_brand_html(),
-        unsafe_allow_html=True,
-    )
-    page = st.radio(
-        "Navigation",
-        navigation_options,
-        label_visibility="collapsed",
-        key="dashboard_page",
-        on_change=sync_dashboard_page,
-    )
-    st.markdown(
-        """
-        <div class="sidebar-wave-container" aria-hidden="true">
-          <svg class="sidebar-waves" viewBox="0 0 255 240" preserveAspectRatio="none">
-            <path class="wave wave-back" d="M0 68 C34 40 68 104 107 91 C151 76 169 27 205 13 C226 5 243 10 255 23 L255 240 L0 240 Z" />
-            <path class="wave wave-mid" d="M0 116 C36 82 75 132 113 132 C151 132 174 81 211 75 C229 72 244 81 255 94 L255 240 L0 240 Z" />
-            <path class="wave wave-front" d="M0 157 C39 119 74 151 108 169 C141 187 166 152 194 130 C217 112 239 120 255 137 L255 240 L0 240 Z" />
-            <path class="wave wave-deep" d="M0 202 C35 174 72 187 105 210 C139 234 166 208 194 185 C219 165 241 174 255 191 L255 240 L0 240 Z" />
-          </svg>
-        </div>
-        <div class="sidebar-footer-copy">TRUST<br>ENCRYPTED<br>INTELLIGENCE</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"<style>[data-testid='stSidebar'] label[data-testid='stRadioOption']:nth-child(9)::after"
-        f"{{content:'{sidebar_open_alert_count}';}}</style>",
-        unsafe_allow_html=True,
-    )
-    sidebar_scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
-    sidebar_model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in sidebar_scan_history]))
-    if requested_model in sidebar_model_names:
-        st.session_state["active_assessment"] = requested_model
-    elif sidebar_model_names and st.session_state.get("active_assessment") not in sidebar_model_names:
-        st.session_state["active_assessment"] = sidebar_model_names[0]
-    selected_model = (
-        st.selectbox("Active assessment", sidebar_model_names, key="active_assessment")
-        if sidebar_model_names
-        else None
-    )
-    st.caption("Credora v2.0")
+page = st.session_state.get("dashboard_page", "Overview")
+
+sidebar_scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
+sidebar_model_names = list(dict.fromkeys([scan.get("model_name", "Unknown") for scan in sidebar_scan_history]))
+if requested_model in sidebar_model_names:
+    st.session_state["active_assessment"] = requested_model
+elif sidebar_model_names and st.session_state.get("active_assessment") not in sidebar_model_names:
+    st.session_state["active_assessment"] = sidebar_model_names[0]
+pending_model = st.session_state.pop("pending_assessment_model", None)
+if pending_model in sidebar_model_names:
+    st.session_state["active_assessment"] = pending_model
+    st.query_params["model"] = pending_model
+selected_model = st.session_state.get("active_assessment")
 
 owner_id, include_all = dashboard_owner_scope()
 scan_history = list_scans(limit=100, owner_id=owner_id, include_all=include_all)
@@ -374,16 +311,22 @@ render_dashboard_topbar(
     open_alert_count,
     show_overview_heading=page == "Overview",
     can_view_platform=can_view_all(current_user),
+    navigation_options=navigation_options,
+    assessment_names=sidebar_model_names,
 )
 
 if page == "Upload Model":
+    st.markdown("<div id='credora-upload-mode'></div>", unsafe_allow_html=True)
     render_page_head(
         "Upload & Analyze Model",
         "Submit a model and its evaluation evidence for the full Credora trust assessment",
     )
     scan_submission = render_scan_submission(PROJECT_ROOT, standalone=True)
     execute_scan_submission(scan_submission, current_user, render_page_head)
-    if scan_submission.submitted:
+    if not scan_submission.submitted:
+        render_saved_upload_assessment(current_user, render_page_head)
+    upload_state = st.session_state.get("upload_assessment", {})
+    if upload_state.get("owner_id") == int(current_user["id"]) and upload_state.get("status") == "completed":
         st.button(
             "Open model overview",
             type="primary",
@@ -396,10 +339,13 @@ if page == "Upload Model":
 
 report_data = resolve_report(selected_model)
 
+if page not in {"Overview", "Upload Model"}:
+    st.markdown("<div id='credora-detail-mode'></div>", unsafe_allow_html=True)
+
 if not report_data:
     if page != "Overview":
         render_page_head("Model Trust Overview", "Encrypted Traffic Classification | Security & Reliability")
-    st.info("No assessment report exists yet. Open Upload & Analyze Model in the sidebar to run a scan.")
+    st.info("No assessment report exists yet. Open Upload Model from the top navigation to run a scan.")
     st.stop()
 
 modules = {result["module"]: result for result in report_data.get("module_results", [])}
@@ -435,6 +381,12 @@ analysis_trace = report_data.get("analysis_trace", [])
 remediation_plan = report_data.get("remediation_plan", [])
 generated_at = report_data.get("generated_at", "not generated")
 model_name = report_data.get("model_name", "Unknown model")
+assessment_owner = next((scan.get("owner_id") for scan in scan_history
+    if scan.get("model_name") == model_name and scan.get("generated_at") == generated_at), current_user["id"])
+comparison_history = list_scan_reports(
+    owner_id=int(assessment_owner) if assessment_owner is not None else int(current_user["id"]),
+    model_name=model_name, limit=30,
+)
 threat_model = report_data.get("threat_model") or build_threat_model(
     report_data.get("module_results", []),
     model_name=model_name,
@@ -460,14 +412,6 @@ if page == "Overview":
     )
     metric_histories = build_metric_histories(model_report_history, report_data)
 
-    with st.container(key="overview_upload_action"):
-        st.button(
-            "Upload Model",
-            type="primary",
-            icon=":material/upload_file:",
-            on_click=navigate_dashboard_page,
-            args=("Upload Model",),
-        )
     render_readiness_banner(
         readiness,
         readiness_note,
@@ -487,19 +431,31 @@ if page == "Overview":
         trust_score_issued,
         security_gate_details.get("decision") == "passed",
     )
-
-    drift_col, summary_col = st.columns([1.45, 1.0], gap="small")
+    render_score_evidence(report_data)
+    drift_col, summary_col = st.columns([1.85, 1.0], gap="small")
     with drift_col:
-        with st.container(border=True):
-            st.markdown(
-                '<div id="overview-drift-card"></div><div class="overview-card-head chart-head"><h3>Trust Drift Over Time</h3><span>Last 30 days⌄</span></div>',
-                unsafe_allow_html=True,
-            )
-            st.plotly_chart(
-                build_drift_figure(model_scan_rows, trust_score),
-                width="stretch",
-                config={"displayModeBar": False, "responsive": True},
-            )
+        with st.container(border=True, key="overview_drift"):
+            title_col, range_col = st.columns([4, 1], vertical_alignment="center")
+            with title_col:
+                st.markdown(
+                    '<div id="overview-drift-card"></div><div class="overview-card-head chart-head"><h3>Trust Drift Over Time</h3></div>',
+                    unsafe_allow_html=True,
+                )
+            with range_col:
+                period = st.selectbox("Drift date range", ["Last 30 days", "Last 90 days", "All assessments"],
+                                      label_visibility="collapsed", key="overview_drift_range")
+            if period != "All assessments":
+                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=30 if period == "Last 30 days" else 90)
+                model_scan_rows = [row for row in model_scan_rows
+                                   if pd.to_datetime(row.get("generated_at"), utc=True, errors="coerce") >= cutoff]
+            if model_scan_rows:
+                st.plotly_chart(
+                    build_drift_figure(model_scan_rows, trust_score),
+                    width="stretch",
+                    config={"displayModeBar": False, "responsive": True},
+                )
+            else:
+                st.caption("No assessments in this date range.")
             st.markdown('<div class="chart-legend"><span>● Trust Score</span><span>– – Alert Threshold</span></div>', unsafe_allow_html=True)
     with summary_col:
         render_model_summary(model_name, model_record, generated_at, str(report_data.get("status") or approval))
@@ -706,6 +662,7 @@ elif page == "Traffic Classifier":
 
 elif page == "Trust Score":
     render_page_head("Trust Score", "Weighted deployment evidence across every assessment module")
+    render_score_evidence(report_data)
     left, right = st.columns([.8, 1.2])
     with left:
         with st.container(border=True):
@@ -736,7 +693,7 @@ elif page == "Trust Score":
                     continue
                 status = result.get("status", "not_run")
                 st.markdown(
-                    f"<div class='module-row'><div><div class='module-title'>{h(module_label(result.get('module', '')))}</div><div class='module-summary'>{h(result.get('summary', ''))}</div></div><div><span class='status-pill' style='background:{STATUS_COLORS.get(status, '#64748b')}'>{h(status)}</span><div class='module-score'>{safe_score(result.get('score')):.1f}/100</div></div></div>",
+                    f"<div class='module-row'><div><div class='module-title'>{h(module_label(result.get('module', '')))}</div><div class='module-summary'>{h(result.get('summary', ''))}</div></div><div><span class='status-pill' style='color:{STATUS_COLORS.get(status, '#64748b')}'>{h(status.replace('_', ' ').title())}</span><div class='module-score'>{safe_score(result.get('score')):.1f}/100</div></div></div>",
                     unsafe_allow_html=True,
                 )
 
@@ -747,6 +704,7 @@ elif page == "Threat Model":
 
 elif page == "Trust Drift":
     render_page_head("Trust Drift", "Changes in deployment confidence across model assessments")
+    render_assessment_comparison(report_data, comparison_history)
     report_input_type = str(report_data.get("input_type", "tabular"))
     scan_rows = [
         scan for scan in scan_history
@@ -847,7 +805,7 @@ else:
             if st.form_submit_button("Change password"):
                 if change_user_password(int(current_user["id"]), current_password, new_password):
                     st.success("Password changed. Please log in again.")
-                    for key in ["auth_user", "access_token", "refresh_token", "report", "progress_events"]:
+                    for key in ["auth_user", "access_token", "refresh_token", "report", "progress_events", "upload_assessment", "pending_assessment_model"]:
                         st.session_state.pop(key, None)
                     st.rerun()
                 else:

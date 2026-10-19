@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 from typing import Any
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -11,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from core.config import DATA_DIR, REPORT_DIR
 from core.assessment_insights import build_analysis_trace, build_remediation_plan
+from core.dataset_references import validate_training_dataset_references
 from core.db import latest_model_by_name, register_model, save_scan
 from core.hashing import sha256_file
 from core.report_schema import Finding, ModuleResult, TrustReport
@@ -73,6 +75,7 @@ def _safe_report_path(model_name: str, suffix: str, owner_id: int | None = None)
 
 
 def _apply_raw_model_cap(result: ModuleResult, metadata: dict[str, Any]) -> ModuleResult:
+    result.details.setdefault("uncapped_score", result.score)
     if metadata.get("_signature_verified") is True or result.score <= RAW_MODEL_TRUST_CAP:
         return result
     result.score = RAW_MODEL_TRUST_CAP
@@ -145,6 +148,10 @@ def run_phase1_scan(
     owner_id: int | None = None,
     report_signing_private_key_path: str | Path | None = None,
     report_signer: str | None = None,
+    result_callback=None,
+    flow_labels_path: str | Path | None = None,
+    execution_device: str | None = None,
+    allow_cpu_fallback: bool = False,
 ) -> TrustReport:
     def progress(level: str, message: str) -> None:
         if progress_callback:
@@ -153,6 +160,8 @@ def run_phase1_scan(
     def run_step(level: str, message: str, runner) -> ModuleResult:
         progress(level, f"Starting: {message}")
         result = runner()
+        if result_callback:
+            result_callback(result)
         issues = [finding.title for finding in result.findings if finding.severity != "info"]
         issue_text = f" Issues: {', '.join(issues[:3])}." if issues else " No actionable issue was found."
         progress(
@@ -185,6 +194,8 @@ def run_phase1_scan(
 
     if metadata_path and Path(metadata_path).exists():
         metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
+        if not isinstance(metadata, dict):
+            raise ValueError("Model metadata must be a JSON object.")
         metadata = _augment_trusted_metadata(metadata, model_path, package_manifest, owner_id=owner_id)
         progress(
             "Level 0 - Intake",
@@ -193,6 +204,30 @@ def run_phase1_scan(
     else:
         metadata = _augment_trusted_metadata({}, model_path, package_manifest, owner_id=owner_id)
         progress("Level 0 - Intake", "Completed with warning: no metadata file was supplied; identity and feature checks will be limited.")
+
+    from core.assessment_inputs import prepare_assessment_inputs
+
+    metadata = validate_training_dataset_references(metadata, owner_id=owner_id)
+    prepared_root = ensure_within_directory(
+        DATA_DIR / "uploads" / (str(owner_id) if owner_id is not None else "shared") / "prepared" / uuid4().hex,
+        DATA_DIR,
+    )
+    prepared = prepare_assessment_inputs(
+        model_path, dataset_path, metadata, prepared_root,
+        flow_labels_path=Path(flow_labels_path) if flow_labels_path else None,
+        execution_device=execution_device, allow_cpu_fallback=allow_cpu_fallback,
+    )
+    if prepared.model_path != model_path:
+        if package_manifest is not None:
+            raise ValueError("Native conversion changes the artifact; package and sign the converted ONNX model before release.")
+        metadata = _augment_trusted_metadata(prepared.metadata, prepared.model_path, None, owner_id=owner_id)
+    else:
+        metadata = prepared.metadata
+    model_path, dataset_path = prepared.model_path, prepared.dataset_path
+    if prepared.provenance or execution_device is not None or allow_cpu_fallback:
+        prepared_root.mkdir(parents=True, exist_ok=True)
+        metadata_path = prepared_root / "assessment-metadata.json"
+        metadata_path.write_text(json.dumps({key: value for key, value in metadata.items() if not key.startswith("_")}), encoding="utf-8")
 
     input_type = str(metadata.get("input_type", "tabular"))
     metadata["input_type"] = input_type
@@ -240,6 +275,8 @@ def run_phase1_scan(
     trust_result = calculate_trust_score(results, FINAL_EXPECTED_MODULES)
     trust_result = _apply_raw_model_cap(trust_result, metadata)
     trust_result = _attach_security_gate_context(trust_result, security_gate)
+    if result_callback:
+        result_callback(trust_result)
     gate_note = " Security Gate failed; deployment is blocked." if security_gate.status == "fail" else ""
     progress(
         "Level 14 - Trust Scoring",
@@ -276,6 +313,12 @@ def run_phase1_scan(
         threat_model=threat_model,
         input_type=input_type,
     )
+    classifier_result = next((item for item in results if item.module == "classifier_evaluation"), None)
+    execution_evidence = dict(classifier_result.details.get("execution", {})) if classifier_result else {}
+    execution_evidence["assessment_scope"] = "classifier_evaluation"
+    execution_evidence["scope_note"] = "Observed execution evidence covers classifier evaluation, not every inference in every assessment stage."
+    report.execution = execution_evidence
+    report.input_provenance = prepared.provenance
     output_path = _safe_report_path(model_name, "phase3_trust_report.json", owner_id=owner_id)
 
     docx_path = None
@@ -308,6 +351,8 @@ def run_phase1_scan(
 
     if docx_path:
         report.docx_report_path = str(docx_path)
+    report.execution = execution_evidence
+    report.input_provenance = prepared.provenance
     report_dict = report.to_dict()
     if report_signing_private_key_path:
         report_dict = sign_report_dict(report_dict, report_signing_private_key_path, signer=report_signer)
@@ -346,6 +391,9 @@ if __name__ == "__main__":
     parser.add_argument("--requirements", type=Path, default=SAMPLE_REQUIREMENTS_DIR / "requirements_demo.txt")
     parser.add_argument("--metadata", type=Path, default=METADATA_DIR / "traffic_rf_v1_metadata.json")
     parser.add_argument("--no-docx", action="store_true", help="Skip DOCX evidence report generation.")
+    parser.add_argument("--flow-labels", type=Path, help="Explicit flow-label CSV for offline PCAP datasets.")
+    parser.add_argument("--device", choices=["cpu", "auto", "cuda"], default=None)
+    parser.add_argument("--allow-cpu-fallback", action="store_true")
     parser.add_argument("--report-signing-private-key", type=Path, help="Optional Ed25519 private key used to sign the final JSON report.")
     parser.add_argument("--report-signer", default="local-report-signer", help="Signer name stored in the final report signature block.")
     args = parser.parse_args()
@@ -358,6 +406,9 @@ if __name__ == "__main__":
         generate_docx=not args.no_docx,
         report_signing_private_key_path=args.report_signing_private_key,
         report_signer=args.report_signer,
+        flow_labels_path=args.flow_labels,
+        execution_device=args.device,
+        allow_cpu_fallback=args.allow_cpu_fallback,
     )
     print(json.dumps(report.to_dict(), indent=2))
 

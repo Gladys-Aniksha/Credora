@@ -28,7 +28,8 @@ def validate_sequence_model_contract(
             f"Model expects sequence length {graph_length}, but metadata declares "
             f"{contract['max_sequence_length']}."
         )
-    if graph_input.dtype != contract["sequence_dtype"]:
+    graph_dtype = {"float": "float32", "double": "float64"}.get(graph_input.dtype, graph_input.dtype)
+    if graph_dtype != contract["sequence_dtype"]:
         raise SequenceDataError(
             f"Model expects {graph_input.dtype} input, but metadata declares "
             f"{contract['sequence_dtype']}."

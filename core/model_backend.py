@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,6 +14,7 @@ from core.config import (
     SEQUENCE_INFERENCE_BATCH_SIZE,
     SEQUENCE_INFERENCE_TIMEOUT_SECONDS,
 )
+from core.execution_provider import EVIDENCE_PREFIX, OnnxExecution, execution_policy
 from core.model_loading import load_checked_model
 from core.onnx_safety import validate_onnx_model
 from core.process_isolation import run_isolated_python
@@ -63,26 +65,20 @@ class SklearnBackend(ModelBackend):
 
 
 class OnnxBackend(ModelBackend):
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, metadata: dict[str, Any] | None = None):
         import onnxruntime as ort
 
         if Path(path).is_file():
             validate_onnx_model(path)
-        session_options = ort.SessionOptions()
-        session_options.intra_op_num_threads = 1
-        session_options.inter_op_num_threads = 1
-        session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        self.session = ort.InferenceSession(
-            str(path),
-            sess_options=session_options,
-            providers=["CPUExecutionProvider"],
-        )
+        self._execution = OnnxExecution(ort, path, metadata)
+        self.session = self._execution.session
+        self.execution_details = self._execution.details
         self.input_name = self.session.get_inputs()[0].name
         self.output_names = [output.name for output in self.session.get_outputs()]
 
     def _run(self, features: pd.DataFrame) -> list:
         inputs = {self.input_name: features.to_numpy(dtype=np.float32)}
-        return self.session.run(self.output_names, inputs)
+        return self._execution.run(self.output_names, inputs)
 
     def predict(self, features: pd.DataFrame) -> np.ndarray:
         outputs = self._run(features)
@@ -111,17 +107,53 @@ class SequenceOnnxBackend(ModelBackend):
         if self.path.stat().st_size > MAX_SEQUENCE_MODEL_BYTES:
             raise ValueError("Sequence ONNX model exceeds the configured size limit.")
         self.metadata = validate_sequence_metadata(metadata)
+        self._execution_policy = execution_policy(self.metadata)
+        self.execution_details: dict[str, Any] = {
+            **self._execution_policy,
+            "strict_gpu_guarantee": False,
+            "execution_observation": "worker_evidence_unavailable",
+            "observed_node_providers": [],
+        }
         self.contract = validate_sequence_model_contract(self.path, self.metadata)
         self.class_labels = np.asarray(self.metadata["class_labels"], dtype=str)
         code = (
             "from core.onnx_worker import run_onnx_worker; import sys; "
-            "run_onnx_worker(sys.argv[1], None, None)"
+            f"run_onnx_worker(sys.argv[1], None, None{self._worker_policy_argument()})"
         )
-        run_isolated_python(
+        completed = run_isolated_python(
             code,
             arguments=[str(self.path)],
             timeout_seconds=SEQUENCE_INFERENCE_TIMEOUT_SECONDS,
         )
+        self._read_execution_details(completed)
+
+    def _worker_policy_argument(self) -> str:
+        # Preserve legacy three-argument worker calls for the default CPU policy.
+        if self._execution_policy == execution_policy():
+            return ""
+        return f", {self._execution_policy!r}"
+
+    def _read_execution_details(self, completed) -> None:
+        stdout = getattr(completed, "stdout", "")
+        if not isinstance(stdout, str):
+            return
+        for line in stdout.splitlines():
+            if line.startswith(EVIDENCE_PREFIX):
+                details = json.loads(line[len(EVIDENCE_PREFIX):])
+                observed = set(self.execution_details.get("observed_node_providers", []))
+                observed.update(details.get("observed_node_providers", []))
+                details["observed_node_providers"] = sorted(observed)
+                details["successful_runs"] = (
+                    self.execution_details.get("successful_runs", 0) + details.get("successful_runs", 0)
+                )
+                reasons = list(self.execution_details.get("fallback_reasons", []))
+                if details.get("fallback_reason") and details["fallback_reason"] not in reasons:
+                    reasons.append(details["fallback_reason"])
+                details["fallback_reasons"] = reasons
+                details["evidence_scope"] = "isolated_worker_inferences_observed_so_far"
+                if "CPUExecutionProvider" in observed and "CUDAExecutionProvider" in observed:
+                    details["execution_observation"] = "mixed_cpu_cuda"
+                self.execution_details = details
 
     def _run_batch(self, features: np.ndarray) -> list[np.ndarray]:
         with TemporaryDirectory(prefix="credora-sequence-") as temp_dir:
@@ -130,13 +162,14 @@ class SequenceOnnxBackend(ModelBackend):
             np.savez_compressed(input_path, X=features)
             code = (
                 "from core.onnx_worker import run_onnx_worker; import sys; "
-                "run_onnx_worker(sys.argv[1], sys.argv[2], sys.argv[3])"
+                f"run_onnx_worker(sys.argv[1], sys.argv[2], sys.argv[3]{self._worker_policy_argument()})"
             )
-            run_isolated_python(
+            completed = run_isolated_python(
                 code,
                 arguments=[str(self.path), str(input_path), str(output_path)],
                 timeout_seconds=SEQUENCE_INFERENCE_TIMEOUT_SECONDS,
             )
+            self._read_execution_details(completed)
             with np.load(output_path, allow_pickle=False) as payload:
                 return [np.asarray(payload[key]) for key in sorted(payload.files)]
 
@@ -204,5 +237,7 @@ def load_model_backend(path: str | Path, metadata: dict[str, Any] | None = None)
             raise ValueError("Sequence models must use the ONNX format.")
         return SequenceOnnxBackend(model_path, metadata or {})
     if model_path.suffix.lower() == ".onnx":
+        if metadata and any(key in metadata for key in ("execution_device", "execution_fallback")):
+            return OnnxBackend(model_path, metadata)
         return OnnxBackend(model_path)
     return SklearnBackend(model_path)

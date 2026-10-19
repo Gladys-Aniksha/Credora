@@ -102,7 +102,7 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
     generalization_gap: float | None = None
     if target_column in train.columns and target_column in test.columns:
         try:
-            model = load_model_backend(model_path)
+            model = load_model_backend(model_path, metadata)
             train_pred = model.predict(train[common_features])
             test_pred = model.predict(test[common_features])
             train_f1 = float(f1_score(train[target_column].astype(str), pd.Series(train_pred).astype(str), average="weighted", zero_division=0))

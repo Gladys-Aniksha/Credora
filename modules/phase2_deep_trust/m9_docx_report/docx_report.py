@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any
+import json
 
 from core.config import REPORT_DIR
 from core.security import ensure_within_directory, slugify_filename
@@ -43,6 +44,10 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
             "SECURITY GATE FAILED: This score is assessment evidence only. Production deployment is blocked."
         )
     doc.add_paragraph(f"Deployment status: {report_dict.get('status', 'unknown')}")
+    for key, heading in (("execution", "Execution Evidence"), ("input_provenance", "Input Provenance")):
+        if report_dict.get(key):
+            doc.add_heading(heading, level=1)
+            doc.add_paragraph(json.dumps(report_dict[key], indent=2))
 
     threat_model = report_dict.get("threat_model", {})
     if threat_model:

@@ -48,7 +48,7 @@ Credora accepts flat, tabular classifiers in three formats:
 
 ONNX support uses the same evaluation, robustness, drift, explainability, privacy, behavior, adversarial, trust-scoring, and deployment-gate workflow as sklearn models. ONNX uploads are limited to 50 MB.
 
-Raw PyTorch and TensorFlow checkpoints are intentionally unsupported. PyTorch checkpoints can reopen the pickle remote-code-execution risk that Credora's secured sklearn loader is designed to contain, while raw framework checkpoints also require preprocessing and sequence-model evaluation behavior outside this tabular-classifier scope.
+Both tabular CSV and sequence NPZ tracks are supported for compatible ONNX models. Offline classic-PCAP ingestion, optional CUDA provider selection and restricted weights-only PyTorch/Keras imports are also available; their exact formats, preprocessing contracts, isolation requirements and limitations are documented in [Extended assessment inputs](docs/EXTENDED_INPUTS.md). Unrestricted framework checkpoints and uploaded model code remain rejected.
 
 To rebuild the sample ONNX model from the sample Random Forest:
 
@@ -621,7 +621,7 @@ Corrective actions are generated from the current report evidence, not selected 
 
 Phase 3 is complete for the project scope. The scanner now covers pre-deployment assessment and post-deployment operational monitoring.
 
-Unsigned `.joblib`, `.pkl`, and `.onnx` assessments fail the Security Gate and do not receive a Trust Score. The signed `.credora` packaging workflow is the production-style path used by CI and release automation; it verifies an external Ed25519 signature, checks artifact hashes, and then permits Trust Score calculation only when every other critical gate also passes. A high weighted score can never override a failed critical check.
+Unsigned `.joblib`, `.pkl`, and `.onnx` assessments fail the signature Security Gate but still display an assessment Trust Score, capped by the existing unsigned-artifact policy. A failed critical gate always blocks deployment independently of that score. The signed `.credora` packaging workflow verifies an external Ed25519 signature and artifact hashes; signatures alone do not override any other critical failure.
 
 Classifier metrics are observations from the uploaded evaluation dataset. Even when observed evaluation accuracy is `1.0`, Credora does not present that result as guaranteed production accuracy; robustness, adversarial safety, drift, leakage, privacy, runtime integrity, and the Security Gate remain separate evidence.
 
@@ -668,7 +668,7 @@ Those feature rows can then be passed into the trained classifier for live predi
 
 ### Sequence-based deep learning support
 
-**Status: Implemented for the safe ONNX/NPZ sequence track. Raw PCAP ingestion remains intentionally out of scope for this phase.**
+**Status: Implemented for the safe ONNX/NPZ sequence track.** The original phase excluded raw captures and GPU execution. Subsequent bounded extensions now support classic PCAP with explicit labels, optional ONNX CUDA execution and approved weights-only imports; see [Extended assessment inputs](docs/EXTENDED_INPUTS.md). The original phase contract below describes its baseline scope, not the limits of these later extensions.
 
 Phase 15 adds ONNX-exported models that take raw packet-byte or token sequences (1D-CNN, LSTM, or small transformers) instead of flat tabular columns. It assumes the work from items 1-14 is complete, especially:
 

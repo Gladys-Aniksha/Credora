@@ -352,6 +352,7 @@ def register_model(
 
 
 def save_scan(report: Any, report_path: str | Path, owner_id: int | None = None) -> int:
+    """Append a JSON snapshot; report_path is an export reference, not history storage."""
     init_db()
     report_dict = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     model_name = report_dict.get("model_name", "unknown_model")
@@ -456,9 +457,17 @@ def list_scan_reports(
     return reports
 
 
-def latest_scan(owner_id: int | None = None, include_all: bool = False) -> dict[str, Any] | None:
+def latest_scan(
+    owner_id: int | None = None,
+    include_all: bool = False,
+    model_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Return the newest saved snapshot in scope, optionally for one exact model."""
     init_db()
     clause, params = _owner_clause(owner_id, include_all)
+    if model_name is not None:
+        clause += " AND model_name = ?" if clause else " WHERE model_name = ?"
+        params = (*params, model_name)
     with connect() as conn:
         row = conn.execute(f"SELECT report_json FROM scan_history{clause} ORDER BY id DESC LIMIT 1", params).fetchone()
     if not row:

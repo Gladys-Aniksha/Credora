@@ -40,6 +40,8 @@ class TrustReport:
     remediation_plan: list[dict[str, Any]] = field(default_factory=list)
     threat_model: dict[str, Any] = field(default_factory=dict)
     input_type: str = "tabular"
+    execution: dict[str, Any] = field(default_factory=dict)
+    input_provenance: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(

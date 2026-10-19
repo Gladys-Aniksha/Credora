@@ -11,6 +11,18 @@ from dashboard.components.common import h
 
 
 def _icon(name: str) -> str:
+    material_symbols = {
+        "gauge": "speed",
+        "fingerprint": "fingerprint",
+        "package": "inventory_2",
+    }
+    if name in material_symbols:
+        return (
+            '<span class="ui-icon material-symbols-rounded" aria-hidden="true" '
+            'style="font-family: \'Material Symbols Rounded\'; font-style: normal; '
+            'font-weight: 400; font-feature-settings: \'liga\'; line-height: 1; letter-spacing: 0;">'
+            f'{material_symbols[name]}</span>'
+        )
     paths = {
         "shield": '<path d="M12 3 5 6v5c0 4.7 2.9 8.1 7 10 4.1-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
         "integrity": '<path d="M12 3 5 6v5c0 4.7 2.9 8.1 7 10 4.1-1.9 7-5.3 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
@@ -178,7 +190,6 @@ def render_readiness_banner(
     security_gate_passed: bool,
     trust_score_issued: bool,
 ) -> None:
-    blocked = decision == "blocked"
     checklist = [
         (security_gate_passed, "Security Gate passed" if security_gate_passed else "Security Gate blocked deployment"),
         (critical_count == 0, "No critical risks detected" if critical_count == 0 else f"{critical_count} critical risk(s) detected"),
@@ -196,22 +207,19 @@ def render_readiness_banner(
         f'<div class="readiness-check {"ok" if ok else "bad"}"><b>{"✓" if ok else "!"}</b><span>{h(label)}</span></div>'
         for ok, label in checklist
     )
-    st.markdown(
-        f"""
-        <section class="overview-readiness {'blocked' if blocked else ''}">
-          <div class="readiness-copy"><div class="overview-eyebrow">Deployment Readiness</div><h2>{h(readiness)}</h2><p>{h(note)}</p></div>
-          <div class="overview-checks">{checks}</div>
-          <div id="overview-report-action"></div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.button(
-        "View Full Report  →",
-        key="overview-view-report",
-        on_click=_navigate,
-        args=("Reports",),
-    )
+    with st.container(key="readiness_banner"):
+        copy_col, checks_col, action_col = st.columns([1.45, 1.1, .65], vertical_alignment="center")
+        with copy_col:
+            st.markdown(
+                f'<div class="readiness-copy"><div class="overview-eyebrow">Deployment Readiness</div>'
+                f'<h2>{h(readiness)}</h2><p>{h(note)}</p></div>', unsafe_allow_html=True,
+            )
+        with checks_col:
+            st.markdown(f'<div class="overview-checks">{checks}</div>', unsafe_allow_html=True)
+        with action_col:
+            st.button("View Full Report", icon=":material/arrow_forward:",
+                      key="overview-view-report", on_click=_navigate, args=("Reports",),
+                      type="primary", width="stretch")
 
 
 def render_metric_cards(
@@ -241,17 +249,17 @@ def render_metric_cards(
         <section class="overview-metrics">
           <article class="overview-metric">
             <div class="metric-label">Trust Score <span>{_icon('info')}</span></div>
-            <div class="metric-core"><i class="metric-round red">{_icon('shield')}</i><div><strong>{trust_value}</strong><p>{trust_detail}</p></div></div>
+            <div class="metric-core"><i class="metric-round red">{_icon('gauge')}</i><div><strong>{trust_value}</strong><p>{trust_detail}</p></div></div>
             {_sparkline(trust_values, '#AD3438') if trust_score_issued else ''}
           </article>
           <article class="overview-metric">
             <div class="metric-label">Model Integrity <span>{_icon('info')}</span></div>
-            <div class="metric-core"><i class="metric-round green">{_icon('integrity')}</i><div><strong>{integrity_score:.0f}<small>/ 100</small></strong><p>{h(integrity_note)}</p></div></div>
+            <div class="metric-core"><i class="metric-round green">{_icon('fingerprint')}</i><div><strong>{integrity_score:.0f}<small>/ 100</small></strong><p>{h(integrity_note)}</p></div></div>
             {_sparkline(integrity_values, '#238656')}
           </article>
           <article class="overview-metric">
             <div class="metric-label">Dependency Risk <span>{_icon('info')}</span></div>
-            <div class="metric-core"><i class="metric-round green">{_icon('database')}</i><div><strong>{dependency_risk:.0f}<small>/ 100</small></strong><p>{'Low risk' if dependency_risk < 25 else 'Elevated risk'}<br>{h(dep_note)}</p></div></div>
+            <div class="metric-core"><i class="metric-round green">{_icon('package')}</i><div><strong>{dependency_risk:.0f}<small>/ 100</small></strong><p>{'Low risk' if dependency_risk < 25 else 'Elevated risk'}<br>{h(dep_note)}</p></div></div>
             {_sparkline(dependency_values, '#397B5B')}
           </article>
           <article class="overview-metric tier-card">
@@ -289,13 +297,13 @@ def build_drift_figure(scan_rows: list[dict[str, Any]], trust_score: float, thre
     ))
     figure.add_hline(y=threshold, line_dash="dash", line_color="#C9585B", line_width=1.4)
     figure.update_layout(
-        height=218,
+        height=166,
         margin={"l": 8, "r": 8, "t": 8, "b": 8},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
         hovermode="x unified",
-        font={"family": "Inter, Arial, sans-serif", "color": "#68707A", "size": 10},
+        font={"family": "Inter, Arial, sans-serif", "color": "#68707A", "size": 12},
         yaxis={"range": [0, 100], "tickvals": [0, 25, 50, 75, 100], "gridcolor": "#EEE6E1", "zeroline": False, "title": None},
         xaxis={"showgrid": True, "gridcolor": "#F2EBE7", "title": None, "tickformat": "%b %d"},
     )
@@ -336,7 +344,7 @@ def render_recent_assessments(scans: list[dict[str, Any]]) -> None:
         rows.append(
             f"<div class='overview-table-row'><strong>{h(str(scan.get('model_name') or 'Unknown'))}</strong>"
             f"<span>{h(str(scan.get('version') or '1.0'))}</span><span>Full Assessment</span>"
-            f"<span>{float(scan.get('trust_score') or 0):.0f}</span><span><i class='status-chip {status_class}'>● {h(status_label)}</i></span>"
+            f"<span>{float(scan.get('trust_score') or 0):.0f}</span><span><i class='status-chip {status_class}'>{h(status_label)}</i></span>"
             f"<span>{h(_short_date(scan.get('generated_at')))}</span><b>⋮</b></div>"
         )
     if not rows:
@@ -365,7 +373,7 @@ def render_alerts(findings: list[dict[str, Any]], generated_at: Any) -> None:
     for finding in findings[:4]:
         severity = str(finding.get("severity") or "low").lower()
         rows.append(
-            f"<div class='alert-table-row'><span><i class='severity-chip {h(severity)}'>● {h(severity.title())}</i></span>"
+            f"<div class='alert-table-row'><span><i class='severity-chip {h(severity)}'>{h(severity.title())}</i></span>"
             f"<strong>{h(str(finding.get('title') or finding.get('description') or 'Assessment finding'))}</strong>"
             f"<span>{h(_short_datetime(generated_at))}</span><b>⋮</b></div>"
         )

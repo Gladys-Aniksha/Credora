@@ -21,10 +21,11 @@ except Exception:  # pragma: no cover - local fallback for environments before d
     JWTError = Exception
     jwt = None
 
-try:  # Preferred production password hashing.
-    from passlib.context import CryptContext
-except Exception:  # pragma: no cover - local fallback for environments before dependency install.
-    CryptContext = None
+bcrypt: Any
+try:  # Only needed to verify existing bcrypt hashes.
+    import bcrypt
+except ImportError:  # pragma: no cover - optional legacy hash support.
+    bcrypt = None
 
 JWT_SECRET = os.getenv("CREDORA_JWT_SECRET") or secrets.token_hex(32)
 JWT_ALGORITHM = "HS256"
@@ -37,7 +38,7 @@ AUTH_RATE_LIMIT_MAX_REQUESTS = 5
 _auth_rate_limit_buckets: dict[str, list[float]] = {}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") if CryptContext else None
+_PBKDF2_ITERATIONS = 600_000
 
 
 def enforce_auth_rate_limit(request: Request) -> None:
@@ -60,24 +61,38 @@ def enforce_auth_rate_limit(request: Request) -> None:
 def hash_password(password: str) -> str:
     if len(password or "") < 8:
         raise ValueError("Password must be at least 8 characters.")
-    if _pwd_context:
-        return _pwd_context.hash(password)
     salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 240_000).hex()
-    return f"pbkdf2_sha256${salt}${digest}"
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), _PBKDF2_ITERATIONS).hex()
+    return f"pbkdf2_sha256_v2${_PBKDF2_ITERATIONS}${salt}${digest}"
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    if not password_hash:
+    if not isinstance(password, str) or not isinstance(password_hash, str) or not password_hash:
         return False
-    if _pwd_context and not password_hash.startswith("pbkdf2_sha256$"):
-        return _pwd_context.verify(password, password_hash)
     try:
-        _, salt, expected = password_hash.split("$", 2)
-    except ValueError:
+        password_bytes = password.encode("utf-8")
+        if password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+            if bcrypt is None or "\x00" in password:
+                return False
+            # Passlib's historical bcrypt path used only the first 72 UTF-8 bytes.
+            return bcrypt.checkpw(password_bytes[:72], password_hash.encode("ascii"))
+        fields = password_hash.split("$")
+        if len(fields) == 3 and fields[0] == "pbkdf2_sha256":
+            _, salt, expected = fields
+            iterations = 240_000
+        elif len(fields) == 4 and fields[:2] == ["pbkdf2_sha256_v2", str(_PBKDF2_ITERATIONS)]:
+            _, _, salt, expected = fields
+            iterations = _PBKDF2_ITERATIONS
+            if len(salt) != 32 or any(char not in "0123456789abcdef" for char in salt):
+                return False
+        else:
+            return False
+        if not salt or len(expected) != 64 or any(char not in "0123456789abcdef" for char in expected):
+            return False
+        actual = hashlib.pbkdf2_hmac("sha256", password_bytes, salt.encode("utf-8"), iterations).hex()
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError, UnicodeError, OverflowError):
         return False
-    actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 240_000).hex()
-    return hmac.compare_digest(actual, expected)
 
 
 DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))

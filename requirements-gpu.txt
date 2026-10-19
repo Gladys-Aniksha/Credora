@@ -1,0 +1,3 @@
+# Optional alternative runtime for a dedicated NVIDIA CUDA/cuDNN environment.
+# Install instead of the CPU onnxruntime distribution, not alongside it.
+onnxruntime-gpu

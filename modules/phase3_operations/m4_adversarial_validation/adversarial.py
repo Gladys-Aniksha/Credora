@@ -101,7 +101,7 @@ def run_adversarial_validation(
 
         return run_sequence_adversarial_validation(model_path, dataset_path, metadata)
     try:
-        model = load_model_backend(model_path)
+        model = load_model_backend(model_path, metadata)
         data = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(

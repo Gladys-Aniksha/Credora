@@ -28,7 +28,7 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
     data_file = Path(dataset_path)
 
     try:
-        model = load_model_backend(model_file)
+        model = load_model_backend(model_file, metadata)
         data = pd.read_csv(data_file)
     except Exception as exc:  # noqa: BLE001
         return ModuleResult("robustness_testing", "fail", 0, "Robustness test could not run.", [Finding("robustness_testing", "Robustness test failed", "high", str(exc), "Verify that model and CSV files are compatible.")])

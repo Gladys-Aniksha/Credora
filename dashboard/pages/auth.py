@@ -12,14 +12,14 @@ def require_dashboard_auth() -> dict:
         return st.session_state["auth_user"]
 
     st.markdown('<div id="credora-login-mode"></div>', unsafe_allow_html=True)
-    left, right = st.columns([50, 50], gap=None, vertical_alignment="center")
+    left, right = st.columns([1, 1], gap=None, vertical_alignment="top")
     with left:
         st.markdown(
             '<div class="login-panel" role="img" aria-label="Credora Model Assurance"></div>',
             unsafe_allow_html=True,
         )
     with right:
-        with st.container(border=True):
+        with st.container(border=True, key="auth_form_card"):
             st.markdown('<div id="credora-auth-card"></div>', unsafe_allow_html=True)
             auth_mode = st.session_state.get("dashboard_auth_mode", "sign_in")
             if auth_mode == "sign_in":
@@ -27,7 +27,7 @@ def require_dashboard_auth() -> dict:
                     "<div class='auth-heading'><h2>Welcome back</h2><p>Sign in to your Credora account to continue securing and validating your models.</p></div>",
                     unsafe_allow_html=True,
                 )
-                with st.form("credora-login"):
+                with st.form("credora-login", enter_to_submit=False):
                     username = st.text_input(
                         "Email",
                         placeholder="you@company.com",
@@ -72,7 +72,7 @@ def require_dashboard_auth() -> dict:
                     "<div class='auth-heading'><h2>Create your account</h2><p>Start an isolated workspace for your models, assessments, reports, and monitoring history.</p></div>",
                     unsafe_allow_html=True,
                 )
-                with st.form("credora-register"):
+                with st.form("credora-register", enter_to_submit=False):
                     new_username = st.text_input("Username", autocomplete="username")
                     email = st.text_input(
                         "Email address",

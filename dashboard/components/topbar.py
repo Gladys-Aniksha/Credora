@@ -5,6 +5,39 @@ from typing import Any
 import streamlit as st
 
 from dashboard.components.common import h
+from dashboard.theme import credora_brand_html
+
+
+PAGE_ICONS = {
+    "Overview": "home",
+    "Model Registry": "inventory_2",
+    "Upload Model": "upload_file",
+    "Traffic Classifier": "account_tree",
+    "Trust Score": "verified_user",
+    "Threat Model": "security",
+    "Trust Drift": "monitoring",
+    "Reports": "description",
+    "Alerts": "notifications",
+    "Settings": "settings",
+    "Admin": "manage_accounts",
+}
+
+
+def render_icon_navigation(pages: list[str], alert_count: int) -> None:
+    active = st.session_state.get("dashboard_page", "Overview")
+    with st.container(key="icon_navigation", horizontal=True, horizontal_alignment="right", gap="small"):
+        for page in pages:
+            with st.container(key=f"nav_{PAGE_ICONS[page]}", width=64):
+                st.button(
+                    page,
+                    icon=f":material/{PAGE_ICONS[page]}:",
+                    help=f"{page} ({alert_count} open)" if page == "Alerts" else page,
+                    key=f"navigate_{PAGE_ICONS[page]}",
+                    type="primary" if active == page else "tertiary",
+                    on_click=_navigate,
+                    args=(page,),
+                    width="stretch",
+                )
 
 
 def _navigate(page: str, model_name: str | None = None) -> None:
@@ -23,6 +56,8 @@ def _logout() -> None:
         "refresh_token",
         "report",
         "progress_events",
+        "upload_assessment",
+        "pending_assessment_model",
         "global_search_query",
     ]:
         st.session_state.pop(key, None)
@@ -105,27 +140,30 @@ def render_dashboard_topbar(
     *,
     show_overview_heading: bool,
     can_view_platform: bool,
+    navigation_options: list[str] | None = None,
+    assessment_names: list[str] | None = None,
 ) -> None:
     username = str(user.get("username") or "Credora user")
     role = str(user.get("role") or "uploader").title()
     initials = "".join(part[:1].upper() for part in username.split()[:2]) or "CU"
 
     with st.container(key="dashboard_topbar"):
-        column_widths = [1.45, 1.05, 0.72]
-        heading_col, search_col, actions_col = st.columns(
+        if show_overview_heading:
+            st.markdown("<div id='credora-overview-mode'></div>", unsafe_allow_html=True)
+        column_widths = [1.05, 2.7, 1.55, .45]
+        heading_col, navigation_col, search_col, actions_col = st.columns(
             column_widths,
             gap="medium",
             vertical_alignment="center",
         )
         with heading_col:
-            if show_overview_heading:
-                st.markdown(
-                    "<div id='credora-overview-mode'></div><div class='overview-heading'><h1>Model Trust Overview</h1>"
-                    "<p>Monitor, assess, and ensure the trustworthiness of your AI models.</p></div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown("<div class='topbar-spacer'></div>", unsafe_allow_html=True)
+            st.markdown(credora_brand_html(), unsafe_allow_html=True)
+        with navigation_col:
+            render_icon_navigation(
+                [page for page in (navigation_options or list(PAGE_ICONS))
+                 if page not in {"Threat Model", "Settings", "Admin"}],
+                alert_count,
+            )
         with search_col:
             with st.container(key="dashboard_search"):
                 query = st.text_input(
@@ -135,21 +173,9 @@ def render_dashboard_topbar(
                     key="global_search_query",
                 )
         with actions_col:
-            alert_col, profile_col = st.columns([0.26, 0.74], gap="small", vertical_alignment="center")
-            with alert_col:
-                st.button(
-                    "",
-                    icon=":material/notifications:",
-                    key="topbar_alerts",
-                    help=f"Open alerts ({alert_count})",
-                    on_click=_navigate,
-                    args=("Alerts",),
-                    width="stretch",
-                )
-            with profile_col:
+            with st.container(key="account_menu"):
                 with st.popover(
-                    f"{initials}  {username}",
-                    icon=":material/account_circle:",
+                    initials,
                     width="stretch",
                 ):
                     st.markdown(
@@ -158,6 +184,13 @@ def render_dashboard_topbar(
                     )
                     if can_view_platform:
                         st.toggle("Show all users' scans", key="show_all_users")
+                    if assessment_names:
+                        st.selectbox("Active assessment", assessment_names, key="active_assessment")
+                    for destination in ("Threat Model", "Settings", "Admin"):
+                        if destination in (navigation_options or []):
+                            st.button(destination, icon=f":material/{PAGE_ICONS[destination]}:",
+                                      on_click=_navigate, args=(destination,),
+                                      key=f"account_{destination}", width="stretch")
                     st.button(
                         "Log out",
                         icon=":material/logout:",

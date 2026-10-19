@@ -14,6 +14,10 @@ data/signing_keys/
 outputs/
 
 .pytest_tmp/
+.pytest_tmp*/
 data/packages/
 .env
+
+# Runtime reports may contain account-specific paths and scan evidence.
+reports/trust_reports/
 
