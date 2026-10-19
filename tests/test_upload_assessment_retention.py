@@ -60,7 +60,8 @@ def test_upload_trace_survives_navigation_without_rescanning(tmp_path, monkeypat
     assert any("Level 17 - Check" in item.value for item in app.markdown)
     assert len(app.session_state["upload_assessment"]["events"]) == 36
     assert app.session_state["pending_assessment_model"] == "new-model"
-    assert app.query_params["model"] == ["new-model"]
+    # AppTest exposes a scalar or list depending on the Streamlit version.
+    assert app.query_params["model"] in ("new-model", ["new-model"])
     app.button(key="analyze").click().run()
     assert not app.exception
     assert calls == [7, 7]
