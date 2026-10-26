@@ -16,9 +16,9 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
     findings: list[Finding] = []
 
     if not model_file.exists():
-        return ModuleResult("classifier_evaluation", "fail", 0, "Model file not found.", [Finding("classifier_evaluation", "Missing model", "critical", "The model file was not found.")])
+        return ModuleResult("classifier_evaluation", "fail", 0, "Model file not found.", [Finding("classifier_evaluation", "Missing model", "critical", "The model file was not found.", metric="details.model_available")], details={"model_available": False})
     if not data_file.exists():
-        return ModuleResult("classifier_evaluation", "fail", 0, "Dataset file not found.", [Finding("classifier_evaluation", "Missing dataset", "critical", "The test dataset was not found.")])
+        return ModuleResult("classifier_evaluation", "fail", 0, "Dataset file not found.", [Finding("classifier_evaluation", "Missing dataset", "critical", "The test dataset was not found.", metric="details.dataset_available")], details={"dataset_available": False})
 
     input_type = metadata.get("input_type", "tabular")
     try:
@@ -34,26 +34,26 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
             compatibility = None
             model = load_model_backend(model_file, metadata)
     except Exception as exc:  # noqa: BLE001
-        return ModuleResult("classifier_evaluation", "fail", 0, "Model could not be loaded.", [Finding("classifier_evaluation", "Model load failed", "critical", str(exc), "Use a trusted .joblib, .pkl, or ONNX tabular classifier.")])
+        return ModuleResult("classifier_evaluation", "fail", 0, "Model could not be loaded.", [Finding("classifier_evaluation", "Model load failed", "critical", str(exc), "Use a trusted .joblib, .pkl, or ONNX tabular classifier.", metric="details.model_load_error")], details={"model_load_error": str(exc)})
 
     if input_type != "sequence":
         try:
             data = pd.read_csv(data_file)
         except Exception as exc:  # noqa: BLE001
-            return ModuleResult("classifier_evaluation", "fail", 0, "Dataset could not be read.", [Finding("classifier_evaluation", "Dataset load failed", "critical", str(exc))])
+            return ModuleResult("classifier_evaluation", "fail", 0, "Dataset could not be read.", [Finding("classifier_evaluation", "Dataset load failed", "critical", str(exc), metric="details.dataset_load_error")], details={"dataset_load_error": str(exc)})
         target_column = metadata.get("target_column", "label")
         if target_column not in data.columns:
-            return ModuleResult("classifier_evaluation", "fail", 0, "Target column not found.", [Finding("classifier_evaluation", "Missing target column", "critical", f"Dataset does not contain '{target_column}'.")])
+            return ModuleResult("classifier_evaluation", "fail", 0, "Target column not found.", [Finding("classifier_evaluation", "Missing target column", "critical", f"Dataset does not contain '{target_column}'.", metric="details.target_column_available")], details={"target_column_available": False, "target_column": target_column})
 
         expected_features = metadata.get("expected_features")
         if expected_features:
             missing = [feature for feature in expected_features if feature not in data.columns]
             if missing:
-                return ModuleResult("classifier_evaluation", "fail", 0, "Dataset is missing expected features.", [Finding("classifier_evaluation", "Feature mismatch", "critical", f"Missing features: {', '.join(missing)}", "Upload a compatible dataset or metadata file.")])
+                return ModuleResult("classifier_evaluation", "fail", 0, "Dataset is missing expected features.", [Finding("classifier_evaluation", "Feature mismatch", "critical", f"Missing features: {', '.join(missing)}", "Upload a compatible dataset or metadata file.", metric="details.missing_features")], details={"missing_features": missing})
             feature_columns = expected_features
         else:
             feature_columns = [column for column in data.columns if column != target_column]
-            findings.append(Finding("classifier_evaluation", "No explicit feature list", "low", "Using all columns except the target label as features.", "Add expected_features to metadata for external models."))
+            findings.append(Finding("classifier_evaluation", "No explicit feature list", "low", "Using all columns except the target label as features.", "Add expected_features to metadata for external models.", metric="details.expected_features_available"))
 
         X = data[feature_columns]
         y_true = data[target_column]
@@ -92,11 +92,11 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
 
     score = round(f1 * 100, 2)
     if f1 < 0.7:
-        findings.append(Finding("classifier_evaluation", "Low classifier F1 score", "high", f"Weighted F1 is {f1:.2f}.", "Retrain or tune the classifier before deployment."))
+        findings.append(Finding("classifier_evaluation", "Low classifier F1 score", "high", f"Weighted F1 is {f1:.2f}.", "Retrain or tune the classifier before deployment.", metric="details.f1_score"))
     elif f1 < 0.85:
-        findings.append(Finding("classifier_evaluation", "Moderate classifier F1 score", "medium", f"Weighted F1 is {f1:.2f}.", "Review confused classes before production use."))
+        findings.append(Finding("classifier_evaluation", "Moderate classifier F1 score", "medium", f"Weighted F1 is {f1:.2f}.", "Review confused classes before production use.", metric="details.f1_score"))
     else:
-        findings.append(Finding("classifier_evaluation", "Classifier performance is strong", "info", f"Weighted F1 is {f1:.2f}."))
+        findings.append(Finding("classifier_evaluation", "Classifier performance is strong", "info", f"Weighted F1 is {f1:.2f}.", metric="details.f1_score"))
 
     if weak_classes:
         weakest = min(weak_classes, key=lambda item: item["f1"])
@@ -106,6 +106,7 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
             "medium",
             f"{weakest['class']} has F1 {weakest['f1']} and recall {weakest['recall']}.",
             f"Collect more labeled {weakest['class']} flows, rebalance class weights, and rerun the scan before deployment.",
+            metric=f"details.weak_classes.{weak_classes.index(weakest)}.f1",
         ))
 
     if confusion_pairs:
@@ -116,6 +117,7 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
             "medium",
             f"{pair['actual']} was predicted as {pair['predicted']} in {pair['count']} test flow(s).",
             f"Add features that separate {pair['actual']} from {pair['predicted']} and validate the confusion matrix after retraining.",
+            metric="details.confusion_pairs.0.count",
         ))
 
     status = "pass" if score >= 85 else "warning" if score >= 70 else "fail"
@@ -126,6 +128,7 @@ def evaluate_classifier(model_path: str | Path, dataset_path: str | Path, metada
         summary=f"Evaluated {len(y_true)} {record_label} record(s).",
         findings=findings,
         details={
+            "expected_features_available": bool(metadata.get("expected_features")),
             "accuracy": round(accuracy, 4),
             "precision": round(precision, 4),
             "recall": round(recall, 4),

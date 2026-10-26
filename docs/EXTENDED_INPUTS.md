@@ -1,15 +1,52 @@
 # Extended assessment inputs
 
-The default ONNX/sklearn + CSV/NPZ workflow is unchanged. New options use the same
+The default ONNX/sklearn + CSV/NPZ workflow is unchanged. Extended inputs use the same
 authenticated, rate-limited, owner-scoped scan route. Conversion never supplies a
 signature, bypasses a gate, or approves deployment.
+
+The supported paths are ONNX tabular/sequence models, secured sklearn artifacts
+and signed model packages, with optional ONNX GPU selection and bounded labeled
+classic-PCAP conversion. Framework checkpoint/weights files are not accepted;
+export a compatible model to ONNX before upload. The API and dashboard run as
+Python processes with no external model-conversion service.
+
+## Runtime dependencies
+
+- Standard deployment uses `requirements.txt`, including CPU `onnxruntime`.
+  Ordinary ONNX/sklearn scans do not require any optional requirements file.
+- `requirements-gpu.txt` supplies the alternative `onnxruntime-gpu` distribution
+  for a dedicated NVIDIA environment. Keep the other application dependencies,
+  but exclude CPU `onnxruntime`; never install both distributions together. This
+  file is not a supplement to an unchanged CPU-runtime installation.
+- Framework exporters and optional fixture-training Torch belong in separate
+  development/export environments. They are not application server dependencies;
+  the default quick fixture builder does not require Torch.
+- Classic-PCAP parsing needs no additional parser package. It uses the Python
+  standard library and imports NumPy only for NPZ sequence output.
 
 ## Offline classic PCAP
 
 In Upload Model, select **Offline PCAP + labels**, upload the capture and a separate
-label CSV, and supply matching metadata. Only classic PCAP 2.4 Ethernet captures
-are supported, not pcapng. There is no live capture or TLS decryption. Fragments,
-truncation, malformed packets and excessive resource demands fail explicitly.
+label CSV, and supply matching metadata. The exact capture contract is:
+
+- Classic PCAP version 2.4, either endian order, with microsecond or nanosecond
+  timestamp resolution. Ethernet linktype 1 without extra linktype flags only;
+  at most two 802.1Q/802.1ad VLAN tags.
+- IPv4/IPv6 TCP or UDP. IPv6 hop-by-hop, routing, destination-option and AH header
+  chains are supported only within the bound of eight headers.
+- IPv4 fragments/reserved fragmentation flag, all IPv6 fragments (even atomic
+  fragments), ESP in either IP version, jumbograms and pcapng are rejected.
+  IPv4 ESP fails explicitly rather than counting as a skipped non-TCP/UDP packet;
+  IPv6 ESP is also rejected after supported extension headers.
+- Truncated global/record/packet headers or bodies, malformed lengths,
+  snaplen-truncated records and decreasing timestamps across the entire capture
+  fail conversion. Captured and original record lengths must match; timestamp
+  fractions must fit the declared resolution. Equal timestamps are allowed.
+- Non-IP Ethernet frames and other IP protocols are skipped and counted. The
+  capture must contain at least one supported, explicitly labeled TCP/UDP flow.
+
+There is no live capture, TLS decryption, TCP stream reassembly or checksum
+validation. Payload is copied as captured; encrypted bytes remain encrypted.
 
 Label CSV columns must be exactly:
 
@@ -18,29 +55,56 @@ src_ip,src_port,dst_ip,dst_port,protocol,label
 10.0.0.1,12345,10.0.0.2,443,tcp,Benign-HTTPS
 ```
 
-Every supported bidirectional flow needs an explicit declared class label. Reverse
-directions normalize together. Endpoint order, not inferred client/server roles,
-defines sent/received. Reused connections sharing a tuple aggregate over the whole
-capture; no timeout splitting, extrapolation or missing-label inference occurs.
+Every supported bidirectional flow needs an explicit label in metadata's
+`class_labels`. The protocol column accepts `tcp`/`udp` or `6`/`17`. Reverse keys
+normalize identically; duplicates, including reversed duplicates, are errors.
+Unused label mappings are allowed, but a mapping that labels none of the actual
+supported flows cannot satisfy the per-flow requirement.
+
+Endpoint order is `(IP version, packed IP address, port)`, not inferred
+client/server roles; endpoint A to B defines sent bytes. Reused connections
+sharing a tuple aggregate over the whole capture, with no timeout splitting,
+extrapolation or missing-label inference. Output rows sort by `(protocol, A, B)`;
+the converter's `flow_keys` records this order.
 
 Metadata must declare one of these precise preprocessing contracts:
 
 - `pcap_flow_v1`: input_type tabular, target_column label. expected_features must
   equal, in order, flow_duration, packet_count, avg_packet_size, bytes_sent,
   bytes_received, iat_mean, iat_std, flow_bytes_per_second. Duration is milliseconds,
-  IAT values seconds and byte counts full IP datagram lengths. These semantics
-  must match training; this is not a recreation of arbitrary CIC/Zeek/DoH schemas.
+  IAT values seconds and byte counts full IP datagram lengths (including IP and
+  transport headers, excluding Ethernet, padding and FCS). `packet_count` counts
+  captured IP packets, `avg_packet_size` is total IP bytes / count, and IAT standard
+  deviation is the population statistic of successive flow gaps (zero with one
+  packet). Rate is total IP bytes / observed duration, or zero for zero duration.
+  CSV columns are exactly these eight features followed by `label`. These
+  semantics must match training; this is not arbitrary CIC/Zeek/DoH compatibility.
 - `pcap_transport_bytes_v1`: input_type sequence, sequence_dtype int64,
-  vocab_size 257, pad_id 0, explicit max_sequence_length. Transport payload bytes
+  vocab_size 257, pad_id 0, explicit max_sequence_length from 1 through 8192.
+  `target_column` must be `label`; tabular `expected_features` must be absent.
+  NPZ contains only `X:int64[flows,length]` and `y:unicode[flows]`. Transport payload bytes
   become byte+1 tokens in capture order, then zero padding. TCP retransmissions
   remain, directions concatenate, and no stream reassembly occurs. Overlength
   flows reject rather than truncate. The model must use this exact encoding.
 
-Default limits include 200 MiB input, one million packets, 100,000 flows and 64 MiB
-output. Packet, mapping and timestamp checks impose further limits. Failures do
-not publish partial datasets. Reports record source/mapping hashes, schema, counts
-and skipped packets without embedding raw addresses or payloads. Captures can
+Both schemas require an explicit `target_column: "label"` and nonempty unique
+`class_labels`. Default converter limits are 200 MiB capture input, one million
+packet records, 100,000 flows, 256 KiB per packet/snaplen, 8 MiB label CSV,
+100,000 label rows and 64 MiB output/dense arrays. The CLI exposes every `Limits`
+field as a `--max-...` flag. Application upload/NPZ limits are separate; passing
+conversion limits does not override downstream limits.
+
+Limits fail the whole conversion. Only one packet, flow aggregates and bounded
+sequence tokens are retained, and output is atomically replaced after successful
+validation; failed conversion does not publish a partial dataset. Reports record
+source/mapping hashes, schema, counts and skipped packets without embedding raw
+addresses or payloads. Captures can
 still contain sensitive information: restrict upload access and retention.
+
+Why this narrow format: explicit byte/packet/flow/header limits bound hostile
+input processing, and fixed feature contracts make training/evaluation semantics
+auditable. Fragment reassembly, ESP decoding, guessed labels and arbitrary exporter
+schemas would add ambiguity and parsing cost that this converter does not support.
 
 ```bat
 python -m core.pcap_ingestion --input capture.pcap --output evaluation.csv --labels labels.csv --schema metadata.json
@@ -50,12 +114,14 @@ python scripts\run_phase1_scan.py --model model.onnx --dataset capture.pcap --me
 ## Optional ONNX GPU execution
 
 CPU remains the default. The upload page and CLI expose cpu, auto and cuda.
-Metadata also accepts execution_device and execution_fallback (`error` or `cpu`).
-Auto prefers available CUDA and permits CPU session fallback. Explicit CUDA fails
+Metadata also accepts `execution_device` and `execution_fallback` (`error` or `cpu`).
+Auto prefers available CUDA and permits CPU session fallback by default; explicit
+`execution_fallback: "error"` disallows that fallback. Explicit CUDA fails
 when unavailable unless CPU session fallback is allowed. Unsupported graph nodes
 may still execute on CPU even with CUDA configured. Reports distinguish configured
 and registered providers from sampled node execution, and never promise strict
-GPU-only execution. Profiling observes the first successful tabular inference or
+GPU-only execution: `strict_gpu_guarantee` is always `False` (JSON `false`).
+Profiling observes the first successful tabular inference or
 isolated sequence batches, not every future run.
 The top-level report execution evidence is explicitly scoped to classifier
 evaluation. Other inference stages receive the same requested device policy,
@@ -67,66 +133,46 @@ GPU environment and requirements-gpu.txt instead of the CPU onnxruntime package;
 do not install both distributions together. Hardware validation is separate from
 provider-selection unit tests.
 
+Why opt-in: CPU deployments remain predictable without GPU packages or compatible
+drivers, while CUDA availability and graph support differ by runtime and model.
+CUDA registration is not node-placement evidence. Successful GPU hardware execution
+has not been verified in this environment; mocked provider tests and real CPU
+fallback checks do not establish GPU correctness or speedup.
+
 ```bat
 python scripts\run_phase1_scan.py --model model.onnx --dataset test.csv --metadata metadata.json --device auto --no-docx
 ```
 
-## Restricted native weights
+## ONNX export compatibility
 
-Accepted layouts are float32 PyTorch `.safetensors` for approved mlp/cnn1d models,
-or Keras 3 `.weights.h5` for approved built-in Dense-only mlp models. This does not
-accept unrestricted .pt, .pth, full .keras/.h5, custom layers or uploaded Python.
-Hidden layers use ReLU; CNNs use valid convolutions/ReLU/global mean. Other
-architectures, activations and preprocessing are not compatible.
+Export framework models on the model owner's machine in a separate development
+environment, then upload only the compatible ONNX artifact, evaluation dataset
+and metadata. Credora does not decode framework checkpoints or execute uploaded
+Python. See the [README export examples](../README.md#bring-your-own-onnx-export)
+for PyTorch, TensorFlow/Keras and scikit-learn.
 
-```json
-{"schema_version":1,"framework":"pytorch","architecture":"mlp",
- "model_name":"approved-mlp","input_type":"tabular","input_size":3,
- "hidden_sizes":[4],"output_size":2,"class_labels":["safe","other"],
- "expected_features":["feature_a","feature_b","feature_c"],"target_column":"label"}
-```
+An export must fit the deployed ONNX Runtime's supported operators and Credora's
+input/output contract. External tensor data and custom operator/opset domains
+are rejected; an export requiring them is not accepted. An exporter completing
+successfully is not proof of compatibility or prediction parity. Check source
+model versus ONNX predictions in the export environment, preserve preprocessing
+and class-label order, then validate the graph, metadata and dataset in Credora.
+This is export-then-upload support for compatible models, not a guarantee for
+every framework, converter release or architecture.
 
-PyTorch tensor names are layers.0.weight/bias, etc., with weights [out,in]. CNNs
-also use convs.0.weight/bias, channels, kernel_sizes, sequence_length, input_size=1
-and float32 evaluation NPZ [N,L]. Keras supports the standard Dense save_weights
-layers/dense/vars layout only; optimizer state, links and custom objects reject.
-Native CNNs cannot directly consume the int64 PCAP token schema. Native MLP PCAP
-use requires the explicit pcap_flow_v1 contract and matching training features.
-
-The application converts these weights to standard ONNX operators in a trusted
-Docker image; it does not need to install PyTorch/TensorFlow on the main server.
-The operator must provision docker/native-import.Dockerfile, publish/resolve its
-immutable image digest, pre-load it, and set
-`NATIVE_IMPORT_IMAGE=registry/image@sha256:<64 hex characters>`. User metadata
-cannot select an image. The importer never automatically builds, pulls or falls
-back to host decoding. Without Docker and this configured image it fails closed;
-normal ONNX/sklearn scans continue to work.
-
-Training/baseline dataset references are restricted to the authenticated owner's
+Training/baseline dataset references remain restricted to the authenticated owner's
 uploads or explicitly approved shared fixture/processed datasets. Metadata cannot
 select another account's files or arbitrary server paths.
 
-The nonroot worker has no network, a read-only root, dropped capabilities,
-no-new-privileges, bounded tmpfs, CPU/memory/PID/file-size limits and independent
-deadlines. Inputs are read-only and only a dedicated output directory is writable.
-Cleanup also stops the container after a CLI timeout. Containers reduce exposure,
-not eliminate every host/kernel/runtime risk; maintain the worker host.
-
-```bat
-python scripts\import_native_model.py model.safetensors metadata.json converted-model
-```
-
-Upload Model and `/scan/phase1` invoke the same importer. Reports record framework,
-source hash, converter and immutable image reference. Converted models remain
-untrusted; package/sign the converted ONNX separately for release.
-
 ## Trained sequence development fixtures
 
-The quick deterministic sequence_test_kit remains unchanged. For genuinely trained
-synthetic four-class, 128-token CNN fixtures:
+The quick deterministic sequence_test_kit remains unchanged. Optional trained
+synthetic four-class, 128-token CNN fixtures use a separate development/export
+environment. Install Torch and the builder dependencies there directly, not in
+the serving environment; CPU Torch is sufficient:
 
 ```bat
-python -m pip install -r requirements-model-build.txt
+python -m pip install "torch>=2.2,<3" numpy onnx onnxruntime scikit-learn
 python scripts\build_test_sequence_model.py --trained --output-dir data\trained_sequence_test_kit
 ```
 
@@ -136,6 +182,34 @@ traffic performance. PyTorch is development-only, not a mandatory runtime or CI
 dependency.
 
 ## Trust, reporting and passwords
+
+Model/report integrity checks use the owner-scoped server artifact registry, not
+metadata-supplied hashes. New report `model_artifact` bindings expose only the
+registration ID, owner and SHA-256; signed-package reports also bind their source
+package. Scans reverify before inference and report publication. Latest-report
+and report-signature API requests return HTTP 409 if artifact or citation checks
+fail. Dashboard JSON/DOCX downloads check at render time and again on download;
+DOCX is regenerated from a checked snapshot instead of trusting a cached export.
+Legacy report export fails closed when its artifact cannot be unambiguously
+matched to that owner's registered model and verification hash.
+
+Each finding's `module` must identify its containing actual module result and
+its `metric` must resolve to `score`, `status`, or a dotted `details` path. Missing
+paths, misattributed findings and duplicate actual module IDs reject report
+serialization/export. File signing validates citations before signing. This is
+structural traceability only: resolving a citation does not prove that a measured
+value is true or that the finding's prose is a valid interpretation.
+
+These checks assume a trustworthy server/registry and do not resist an attacker
+who changes both the model and its stored baseline or eliminate every concurrent
+file replacement race. Stored model/package uploads and extracted models now use
+AES-256-GCM encryption, authenticated in-memory reads, read-attempt/completion
+audits and a persistent distinct-artifact burst limit. Plaintext SHA-256 baselines
+and model sizes retain their original meaning. Source fixtures remain plaintext;
+datasets, metadata and reports are outside model-encryption scope. A required
+runtime key and explicit verified legacy migration are described in
+[protected storage setup and limits](../README.md#phase-3-security-setup-protected-model-storage).
+These protections do not resist theft of the key or control of the running server.
 
 Failed Security Gates block deployment regardless of score. Unsigned artifacts
 retain their existing assessment-score cap. JSON signatures cover execution and

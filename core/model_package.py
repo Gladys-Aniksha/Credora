@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -11,9 +14,14 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 
 from core.hashing import sha256_file
+from core.model_access import access_environment
+from core.model_storage import model_size, read_model_bytes, write_model_bytes
 
 PACKAGE_VERSION = 1
 MANIFEST_NAME = "manifest.json"
@@ -78,13 +86,16 @@ def create_signed_model_package(
         "metadata": "artifacts/metadata.json",
         "requirements": "artifacts/requirements.txt",
     }
+    model_bytes = read_model_bytes(source_paths["model"])
     artifacts = {}
     for name, path in source_paths.items():
         artifacts[name] = {
             "path": package_entries[name],
-            "sha256": sha256_file(path),
-            "size_bytes": path.stat().st_size,
+            "sha256": hashlib.sha256(model_bytes).hexdigest() if name == "model" else sha256_file(path),
+            "size_bytes": model_size(path) if name == "model" else path.stat().st_size,
         }
+    if artifacts["model"]["size_bytes"] != len(model_bytes):
+        raise ModelPackageError("Model changed while creating its package.")
 
     manifest = {
         "package_version": PACKAGE_VERSION,
@@ -104,25 +115,80 @@ def create_signed_model_package(
         archive.writestr(MANIFEST_NAME, manifest_bytes)
         archive.writestr(SIGNATURE_NAME, base64.b64encode(signature))
         for name, path in source_paths.items():
-            archive.write(path, package_entries[name])
+            if name == "model":
+                archive.writestr(package_entries[name], model_bytes)
+            else:
+                archive.write(path, package_entries[name])
     return target
 
 
 def _validate_member_name(name: str) -> None:
     member = PurePosixPath(name)
-    if member.is_absolute() or ".." in member.parts or "\\" in name:
+    if (
+        not member.parts or member.is_absolute() or ".." in member.parts or "\\" in name or "\x00" in name
+        or any(":" in part or part.endswith((".", " ")) for part in member.parts)
+    ):
         raise ModelPackageError(f"Unsafe package member path: {name}")
+
+
+def _artifact_destinations(artifacts: dict, destination: Path, names: set[str]) -> dict[str, tuple[str, Path]]:
+    """Validate every output before extraction can publish either ciphertext or plaintext."""
+    try:
+        root = Path(os.path.normcase(str(destination.resolve())))
+        outputs: dict[str, tuple[str, Path]] = {}
+        member_paths: list[PurePosixPath] = []
+        canonical_paths: list[Path] = []
+        file_identities: set[tuple[int, int]] = set()
+        for name, details in artifacts.items():
+            if not isinstance(details, dict) or not isinstance(details.get("path"), str):
+                raise ModelPackageError("Invalid package artifact path.")
+            member_name = details["path"]
+            _validate_member_name(member_name)
+            if member_name not in names:
+                raise ModelPackageError(f"Manifest artifact is missing: {member_name}")
+            member = PurePosixPath(member_name)
+            # Enforce portable case uniqueness even when inspecting an archive on Linux.
+            member_key = PurePosixPath(os.path.normcase(member.as_posix()).casefold())
+            target = Path(os.path.normcase(str(destination.joinpath(*member.parts).resolve())))
+            if target == root or not target.is_relative_to(root):
+                raise ModelPackageError("Package artifact destination escapes the extraction root.")
+            if any(
+                member_key == prior or member_key in prior.parents or prior in member_key.parents
+                for prior in member_paths
+            ) or any(
+                target == prior or target in prior.parents or prior in target.parents
+                for prior in canonical_paths
+            ):
+                raise ModelPackageError("Package artifact destinations overlap.")
+            if target.exists():
+                info = target.stat()
+                identity = (info.st_dev, info.st_ino)
+                if identity in file_identities:
+                    raise ModelPackageError("Package artifact destinations overlap through an existing file.")
+                file_identities.add(identity)
+            member_paths.append(member_key)
+            canonical_paths.append(target)
+            outputs[name] = (member_name, target)
+        return outputs
+    except (OSError, RuntimeError) as exc:
+        raise ModelPackageError("Package artifact destinations cannot be resolved safely.") from exc
 
 
 def verify_model_package(
     package_path: str | Path,
     trusted_public_key_path: str | Path,
     extract_dir: str | Path,
+    *,
+    owner_id: int | None = None,
 ) -> VerifiedModelPackage:
+    if owner_id is None:
+        context_owner = access_environment()["CREDORA_MODEL_ACCESS_OWNER"]
+        owner_id = int(context_owner) if context_owner else None
     package = Path(package_path)
     if not package.is_file():
         raise ModelPackageError(f"Model package not found: {package}")
-    if package.stat().st_size > MAX_PACKAGE_BYTES:
+    package_bytes = read_model_bytes(package)
+    if len(package_bytes) > MAX_PACKAGE_BYTES:
         raise ModelPackageError("Model package exceeds the 512 MB safety limit.")
 
     public_key = serialization.load_pem_public_key(Path(trusted_public_key_path).read_bytes())
@@ -130,8 +196,7 @@ def verify_model_package(
         raise ModelPackageError("The trust key must be an Ed25519 public key.")
 
     destination = Path(extract_dir)
-    destination.mkdir(parents=True, exist_ok=True)
-    with ZipFile(package) as archive:
+    with ZipFile(BytesIO(package_bytes)) as archive:
         infos = archive.infolist()
         for info in infos:
             _validate_member_name(info.filename)
@@ -155,18 +220,18 @@ def verify_model_package(
         if set(artifacts) != {"model", "metadata", "requirements"}:
             raise ModelPackageError("Package must contain model, metadata, and requirements artifacts.")
 
+        destinations = _artifact_destinations(artifacts, destination, names)
         extracted: dict[str, Path] = {}
         for name, details in artifacts.items():
-            member_name = str(details.get("path", ""))
-            _validate_member_name(member_name)
-            if member_name not in names:
-                raise ModelPackageError(f"Manifest artifact is missing: {member_name}")
+            member_name, target = destinations[name]
             data = archive.read(member_name)
-            target = destination.joinpath(*PurePosixPath(member_name).parts)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
-            if sha256_file(target) != details.get("sha256") or target.stat().st_size != details.get("size_bytes"):
+            if hashlib.sha256(data).hexdigest() != details.get("sha256") or len(data) != details.get("size_bytes"):
                 raise ModelPackageError(f"Artifact verification failed: {name}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if name == "model":
+                write_model_bytes(target, data, owner_id=owner_id)
+            else:
+                target.write_bytes(data)
             extracted[name] = target
 
     return VerifiedModelPackage(

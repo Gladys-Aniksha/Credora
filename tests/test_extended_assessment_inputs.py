@@ -1,9 +1,11 @@
 import base64
+import builtins
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 from core.assessment_inputs import prepare_assessment_inputs
 from dashboard.theme import credora_brand_html
@@ -33,10 +35,58 @@ def test_capture_needs_explicit_labels(tmp_path) -> None:
         prepare_assessment_inputs(Path("model.onnx"), Path("capture.pcap"), {}, tmp_path)
 
 
-def test_no_unrestricted_native_checkpoint_fallback(tmp_path) -> None:
-    for extension in ("pt", "pth", "keras", "h5"):
-        with pytest.raises(ValueError, match="Unrestricted"):
-            prepare_assessment_inputs(Path(f"model.{extension}"), Path("test.csv"), {}, tmp_path)
+RAW_WEIGHT_NAMES = [
+    "model.safetensors", "model.weights.h5", "model.pt", "model.pth", "model.keras",
+    "model.h5", "model.hdf5", "model.ckpt", "model.ckpt.index",
+    "model.ckpt.data-00000-of-00001", "saved_model.pb", "model.tflite",
+    "pytorch_model.bin", "model.SAFETENSORS", "model.WEIGHTS.H5", "model.PT",
+]
+
+
+@pytest.mark.parametrize("name", RAW_WEIGHT_NAMES)
+def test_raw_framework_weights_require_onnx_export_before_preparation(tmp_path, monkeypatch, name) -> None:
+    original_import = builtins.__import__
+
+    def without_conversion(module, *args, **kwargs):
+        if module in {"torch", "tensorflow"}:
+            raise AssertionError(f"Unsupported framework imported: {module}")
+        return original_import(module, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", without_conversion)
+    output = tmp_path / "prepared"
+    original_metadata = {"framework": "pytorch", "execution_device": "cuda"}
+    with pytest.raises(ValueError, match=r"Export raw framework weights to ONNX \(\.onnx\)"):
+        prepare_assessment_inputs(Path(name), Path("missing.pcap"), original_metadata, output)
+    assert original_metadata == {"framework": "pytorch", "execution_device": "cuda"}
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("name", RAW_WEIGHT_NAMES)
+def test_scan_rejects_raw_weights_before_registry_or_assessment(tmp_path, monkeypatch, name) -> None:
+    from scripts import run_phase1_scan as scan
+
+    def must_not_run(*args, **kwargs):
+        pytest.fail("Raw framework weights reached registry access or assessment")
+
+    monkeypatch.setattr(scan, "latest_model_by_name", must_not_run)
+    monkeypatch.setattr(scan, "verify_model", must_not_run)
+    with pytest.raises(ValueError, match="Export raw framework weights to ONNX"):
+        scan.run_phase1_scan(tmp_path / name, tmp_path / "test.csv", tmp_path / "requirements.txt",
+                             owner_id=42, generate_docx=False)
+
+
+@pytest.mark.parametrize("name", ["model.onnx", "model.ONNX", "model.joblib", "model.pkl"])
+def test_supported_artifact_identity_and_trusted_metadata_are_preserved(tmp_path, name) -> None:
+    original_metadata = {"_signature_verified": True, "_expected_sha256": "signed-hash"}
+    output = tmp_path / "prepared"
+    model, dataset = Path(name), Path("test.csv")
+    prepared = prepare_assessment_inputs(model, dataset, original_metadata, output)
+    assert prepared.model_path == model
+    assert prepared.dataset_path == dataset
+    assert prepared.metadata == original_metadata
+    assert prepared.metadata is not original_metadata
+    assert prepared.provenance == {}
+    assert not output.exists()
 
 
 def test_gpu_is_not_claimed_for_sklearn(tmp_path) -> None:
@@ -45,23 +95,92 @@ def test_gpu_is_not_claimed_for_sklearn(tmp_path) -> None:
                                   execution_device="cuda")
 
 
-def test_native_conversion_stays_unsigned_and_uses_generated_paths(tmp_path, monkeypatch) -> None:
-    from core.native_import import NativeImportResult
+@pytest.mark.parametrize("sequence", [False, True])
+def test_pcap_preparation_preserves_provenance_and_gpu_policy(tmp_path, sequence) -> None:
+    from test_pcap_ingestion import inputs, metadata
 
-    def convert(weights, metadata, output):
-        output.mkdir()
-        path = output / "metadata.json"
-        path.write_text(json.dumps({"input_type": "tabular", "conversion_provenance": {
-            "is_signature_or_trust": False,
-        }}), encoding="utf-8")
-        return NativeImportResult(output / "model.onnx", path)
+    from core.hashing import sha256_file
 
-    monkeypatch.setattr("core.native_import.import_native_model", convert)
-    result = prepare_assessment_inputs(Path("weights.safetensors"), Path("test.csv"),
-                                       {"framework": "pytorch"}, tmp_path / "prepared")
-    assert result.model_path.name == "model.onnx"
-    assert result.provenance["model_conversion"]["is_signature_or_trust"] is False
-    assert not result.metadata.get("_signature_verified", False)
+    source, labels = inputs(tmp_path)
+    original_metadata = {**metadata(sequence), "_signature_verified": True}
+    before = dict(original_metadata)
+    output = tmp_path / "prepared"
+    model = Path("model.onnx")
+    result = prepare_assessment_inputs(
+        model, source, original_metadata, output, flow_labels_path=labels,
+        execution_device="auto", allow_cpu_fallback=True,
+    )
+    assert result.model_path == model
+    assert result.dataset_path == (output / ("evaluation.npz" if sequence else "evaluation.csv")).resolve()
+    assert result.dataset_path.is_file()
+    assert result.metadata["_signature_verified"] is True
+    assert result.metadata["execution_device"] == "auto"
+    assert result.metadata["execution_fallback"] == "cpu"
+    assert original_metadata == before
+    assert result.provenance == {"dataset_conversion": {
+        "format": "offline_pcap", "schema": original_metadata["pcap_schema"],
+        "source_sha256": sha256_file(source), "labels_sha256": sha256_file(labels),
+        "rows": 1, "packets": 1, "skipped_packets": 0, "decrypts_tls": False,
+    }}
+
+
+@pytest.mark.parametrize("signed_package", [False, True])
+def test_scan_keeps_owner_scoped_preparation_and_package_trust(tmp_path, monkeypatch, signed_package) -> None:
+    from test_pcap_ingestion import inputs, metadata
+
+    from scripts import run_phase1_scan as scan
+
+    source, labels = inputs(tmp_path)
+    model = tmp_path / "model.onnx"
+    model.write_bytes(b"fixed intake fixture; inference is intercepted")
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(json.dumps(metadata()), encoding="utf-8")
+    requirements = tmp_path / "requirements.txt"
+    owner_queries = []
+
+    def registered(name, owner_id):
+        owner_queries.append(owner_id)
+        return {"sha256": "registered-hash"}
+
+    monkeypatch.setattr(scan, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(scan, "latest_model_by_name", registered)
+    intake_model = model
+    if signed_package:
+        from core import model_package
+
+        intake_model = tmp_path / "model.credora"
+        intake_model.write_bytes(b"fixed package fixture; verification is intercepted")
+        monkeypatch.setattr(model_package, "verify_model_package", lambda *args: SimpleNamespace(
+            model_path=model, requirements_path=requirements, metadata_path=metadata_path,
+            manifest={"artifacts": {"model": {"sha256": "signed-hash"}}},
+        ))
+
+    class IntakeChecked(Exception):
+        pass
+
+    def check_intake(path, prepared_metadata):
+        assert path == model
+        assert prepared_metadata["_signature_verified"] is signed_package
+        assert prepared_metadata["_expected_sha256"] == ("signed-hash" if signed_package else "registered-hash")
+        assert prepared_metadata["execution_device"] == "auto"
+        assert prepared_metadata["execution_fallback"] == "cpu"
+        raise IntakeChecked
+
+    monkeypatch.setattr(scan, "verify_model", check_intake)
+    with pytest.raises(IntakeChecked):
+        scan.run_phase1_scan(
+            intake_model, source, requirements, metadata_path,
+            trusted_public_key_path=tmp_path / "trusted.pem", owner_id=42,
+            flow_labels_path=labels, execution_device="auto", generate_docx=False,
+        )
+    assert owner_queries == ([] if signed_package else [42])
+    prepared = list((tmp_path / "data" / "uploads" / "42" / "prepared").iterdir())
+    assert len(prepared) == 1
+    assert (prepared[0] / "evaluation.csv").is_file()
+    saved = json.loads((prepared[0] / "assessment-metadata.json").read_text())
+    assert saved["execution_device"] == "auto"
+    assert not any(key.startswith("_") for key in saved)
+    assert not (tmp_path / "data" / "uploads" / "shared").exists()
 
 
 @pytest.mark.parametrize("contents", ["[]", "{not valid JSON"])

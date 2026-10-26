@@ -39,8 +39,8 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
             return ModuleResult(
                 "data_drift_detection", "warning", 65,
                 "No sequence training baseline was available for aggregate drift comparison.",
-                [Finding("data_drift_detection", "Missing sequence baseline", "medium", "Sequence drift needs a training NPZ baseline.", "Add training_dataset_path metadata pointing to the training NPZ file.")],
-                {"input_type": "sequence", "drifted_features": []},
+                [Finding("data_drift_detection", "Missing sequence baseline", "medium", "Sequence drift needs a training NPZ baseline.", "Add training_dataset_path metadata pointing to the training NPZ file.", metric="details.baseline_available")],
+                {"input_type": "sequence", "drifted_features": [], "baseline_available": False},
             )
         try:
             baseline_path = resolve_user_data_path(baseline_raw, PROJECT_ROOT)
@@ -53,7 +53,8 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
             return ModuleResult(
                 "data_drift_detection", "fail", 0,
                 "Could not read sequence data for drift detection.",
-                [Finding("data_drift_detection", "Sequence drift check failed", "high", str(exc), "Provide compatible training and holdout NPZ files.")],
+                [Finding("data_drift_detection", "Sequence drift check failed", "high", str(exc), "Provide compatible training and holdout NPZ files.", metric="details.error")],
+                {"error": str(exc)},
             )
         drift_rows = []
         for column in expected.columns:
@@ -65,11 +66,11 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
         mean_psi = float(np.mean([row["psi"] for row in drift_rows])) if drift_rows else 0.0
         score = round(max(0.0, 100.0 - len(drifted) * 8 - len(high_drifted) * 10 - min(max_psi * 25, 20)), 2)
         if high_drifted:
-            findings.append(Finding("data_drift_detection", "High sequence aggregate drift detected", "high", f"{len(high_drifted)} sequence aggregate(s) have PSI >= 0.25.", "Re-evaluate or retrain with current sequence traffic."))
+            findings.append(Finding("data_drift_detection", "High sequence aggregate drift detected", "high", f"{len(high_drifted)} sequence aggregate(s) have PSI >= 0.25.", "Re-evaluate or retrain with current sequence traffic.", metric="details.max_psi"))
         elif drifted:
-            findings.append(Finding("data_drift_detection", "Moderate sequence aggregate drift detected", "medium", f"{len(drifted)} sequence aggregate(s) have PSI >= 0.10.", "Monitor the changed sequence properties and reassess if the trend continues."))
+            findings.append(Finding("data_drift_detection", "Moderate sequence aggregate drift detected", "medium", f"{len(drifted)} sequence aggregate(s) have PSI >= 0.10.", "Monitor the changed sequence properties and reassess if the trend continues.", metric="details.drifted_features"))
         else:
-            findings.append(Finding("data_drift_detection", "No major sequence drift detected", "info", "Current sequence aggregates are close to the training baseline."))
+            findings.append(Finding("data_drift_detection", "No major sequence drift detected", "info", "Current sequence aggregates are close to the training baseline.", metric="details.max_psi"))
         return ModuleResult(
             "data_drift_detection", "pass" if score >= 80 else "warning" if score >= 55 else "fail", score,
             f"Compared {len(drift_rows)} sequence aggregate distribution(s) against the training baseline.", findings,
@@ -91,9 +92,9 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
                     "Unsafe baseline dataset path",
                     "critical",
                     str(exc),
-                    "Use a baseline dataset stored under Credora's data directory, not an arbitrary path from uploaded metadata.",
+                    "Use a baseline dataset stored under Credora's data directory, not an arbitrary path from uploaded metadata.", metric="details.error",
                 )],
-                details={"baseline_dataset_path": str(baseline_path), "drifted_features": []},
+                details={"baseline_dataset_path": str(baseline_path), "drifted_features": [], "error": str(exc)},
             )
     else:
         baseline_path = current_path.parents[1] / "processed" / "encrypted_traffic_train.csv"
@@ -104,15 +105,15 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
             status="warning",
             score=65,
             summary="No baseline training dataset was available for drift comparison.",
-            findings=[Finding("data_drift_detection", "Missing baseline dataset", "medium", "Drift detection needs a training or baseline CSV to compare against the uploaded test data.", "Add training_dataset_path to metadata or keep the training CSV in data/processed.")],
-            details={"baseline_dataset_path": str(baseline_path), "drifted_features": []},
+            findings=[Finding("data_drift_detection", "Missing baseline dataset", "medium", "Drift detection needs a training or baseline CSV to compare against the uploaded test data.", "Add training_dataset_path to metadata or keep the training CSV in data/processed.", metric="details.baseline_available")],
+            details={"baseline_dataset_path": str(baseline_path), "drifted_features": [], "baseline_available": False},
         )
 
     try:
         baseline = pd.read_csv(baseline_path)
         current = pd.read_csv(current_path)
     except Exception as exc:  # noqa: BLE001
-        return ModuleResult("data_drift_detection", "fail", 0, "Could not read datasets for drift detection.", [Finding("data_drift_detection", "Dataset read failed", "high", str(exc))])
+        return ModuleResult("data_drift_detection", "fail", 0, "Could not read datasets for drift detection.", [Finding("data_drift_detection", "Dataset read failed", "high", str(exc), metric="details.error")], {"error": str(exc)})
 
     target_column = metadata.get("target_column", "label")
     feature_columns = metadata.get("expected_features") or [column for column in current.columns if column != target_column]
@@ -130,11 +131,11 @@ def detect_data_drift(current_dataset_path: str | Path, metadata: dict | None = 
     score = round(max(0.0, 100.0 - len(drifted) * 8 - len(high_drifted) * 10 - min(max_psi * 25, 20)), 2)
 
     if high_drifted:
-        findings.append(Finding("data_drift_detection", "High data drift detected", "high", f"{len(high_drifted)} feature(s) have PSI >= 0.25.", "Re-evaluate or retrain the classifier with current traffic data."))
+        findings.append(Finding("data_drift_detection", "High data drift detected", "high", f"{len(high_drifted)} feature(s) have PSI >= 0.25.", "Re-evaluate or retrain the classifier with current traffic data.", metric="details.max_psi"))
     elif drifted:
-        findings.append(Finding("data_drift_detection", "Moderate data drift detected", "medium", f"{len(drifted)} feature(s) have PSI >= 0.10.", "Monitor model performance and consider retraining if the trend continues."))
+        findings.append(Finding("data_drift_detection", "Moderate data drift detected", "medium", f"{len(drifted)} feature(s) have PSI >= 0.10.", "Monitor model performance and consider retraining if the trend continues.", metric="details.drifted_features"))
     else:
-        findings.append(Finding("data_drift_detection", "No major drift detected", "info", "Current test traffic is close to the baseline feature distribution."))
+        findings.append(Finding("data_drift_detection", "No major drift detected", "info", "Current test traffic is close to the baseline feature distribution.", metric="details.max_psi"))
 
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
     return ModuleResult(

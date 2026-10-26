@@ -1,7 +1,0 @@
-# Optional development-only training. Never required by the quick builder or CI.
-# Install manually in the build environment; CPU PyTorch is sufficient.
-torch>=2.2,<3
-numpy
-onnx
-onnxruntime
-scikit-learn

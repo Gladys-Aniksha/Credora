@@ -1,18 +1,31 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-import json
-from pathlib import Path
+import hashlib
 import hmac
+import json
 import time
+from dataclasses import asdict
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
+from starlette.formparsers import MultiPartParser
 
 Limiter: Any = None
 RateLimitExceeded: Any = None
@@ -23,7 +36,9 @@ _rate_limit_exceeded_handler: Any = None
 try:
     from slowapi import Limiter as _Limiter
     from slowapi.errors import RateLimitExceeded as _RateLimitExceeded
-    from slowapi.extension import _rate_limit_exceeded_handler as _slowapi_rate_limit_exceeded_handler
+    from slowapi.extension import (
+        _rate_limit_exceeded_handler as _slowapi_rate_limit_exceeded_handler,
+    )
     from slowapi.middleware import SlowAPIMiddleware as _SlowAPIMiddleware
     from slowapi.util import get_remote_address as _get_remote_address
 except Exception:  # pragma: no cover - optional until requirements are installed.
@@ -35,6 +50,11 @@ else:
     get_remote_address = _get_remote_address
     _rate_limit_exceeded_handler = _slowapi_rate_limit_exceeded_handler
 
+from core.artifact_integrity import (
+    assert_report_artifact_integrity,
+    register_or_verify_artifact,
+)
+from core.assessment_inputs import validate_assessment_model_format
 from core.auth import (
     can_view_all,
     create_access_token,
@@ -78,16 +98,83 @@ from core.db import (
     set_user_disabled,
     update_user_role,
 )
+from core.model_access import ModelAccessLimitError, model_access_context
 from core.model_package import ModelPackageError, verify_model_package
-from core.sequence_validation import validate_sequence_compatibility
+from core.model_storage import require_model_encryption_key, write_model_bytes
+from core.report_evidence import validate_report_evidence
 from core.report_signing import verify_report_against_trusted_signers
 from core.security import ensure_within_directory, slugify_filename
+from core.sequence_validation import validate_sequence_compatibility
 from modules.phase3_operations.m6_runtime_integrity.scheduler import run_integrity_cycle
 from modules.phase3_operations.m7_flow_ingestion.collector import ingest_flow_file
-from modules.phase3_operations.m8_production_monitoring.monitor import monitor_rolling_windows
+from modules.phase3_operations.m8_production_monitoring.monitor import (
+    monitor_rolling_windows,
+)
 from scripts.run_phase1_scan import run_phase1_scan
 
+# Accepted bodies are bounded before parsing, so file parts cannot reach disk.
+MultiPartParser.spool_max_size = MAX_UPLOAD_BYTES
+
+
+class BoundedBodyMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def reject():
+            response = JSONResponse(status_code=413, content={"detail": "Upload exceeds Credora size limit."})
+            await response(scope, receive, send)
+
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"content-length":
+                try:
+                    length = int(value)
+                except ValueError:
+                    response = JSONResponse(status_code=400, content={"detail": "Invalid Content-Length."})
+                    return await response(scope, receive, send)
+                if length < 0:
+                    response = JSONResponse(status_code=400, content={"detail": "Invalid Content-Length."})
+                    return await response(scope, receive, send)
+                if length > MAX_UPLOAD_BYTES:
+                    return await reject()
+
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            chunk = message.get("body", b"")
+            if len(body) + len(chunk) > MAX_UPLOAD_BYTES:
+                return await reject()
+            body.extend(chunk)
+            if not message.get("more_body", False):
+                break
+
+        buffered = bytes(body)
+        del body
+        replayed = False
+
+        async def replay():
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": buffered, "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay, send)
+
+
 app = FastAPI(title="Credora API", version="0.2.0")
+
+
+@app.exception_handler(ModelAccessLimitError)
+async def model_access_limit_handler(request: Request, exc: ModelAccessLimitError):
+    return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=TRUSTED_ORIGINS,
@@ -162,15 +249,7 @@ class DeploymentOverrideRequest(BaseModel):
     decision: str
     justification: str
 
-@app.middleware("http")
-async def reject_oversized_requests(request: Request, call_next):
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_UPLOAD_BYTES:
-        return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            content={"detail": "Upload exceeds Credora size limit."},
-        )
-    return await call_next(request)
+app.add_middleware(BoundedBodyMiddleware)
 
 
 def require_api_key(x_credora_api_key: str | None = Header(default=None)) -> None:
@@ -202,6 +281,7 @@ def _owner_scope(user: dict[str, Any]) -> tuple[int | None, bool]:
 
 @app.on_event("startup")
 def on_startup() -> None:
+    require_model_encryption_key()
     init_db()
 
 
@@ -373,6 +453,7 @@ def verify_scan_report_signature(scan_id: int, user: dict[str, Any] = Depends(ge
     scan = get_scan_record(scan_id, include_report=True, owner_id=owner_id, include_all=include_all)
     if not scan or not scan.get("report"):
         raise HTTPException(status_code=404, detail="Scan report not found")
+    _check_report_access(scan["report"], owner_id=scan.get("owner_id"), actor_id=int(user["id"]))
     return verify_report_against_trusted_signers(scan["report"], list_trusted_signers())
 
 @app.delete("/scans/{scan_id}")
@@ -406,16 +487,53 @@ def scans(user: dict[str, Any] = Depends(get_current_user)) -> list[dict]:
 @app.get("/scans/latest")
 def scan_latest(user: dict[str, Any] = Depends(get_current_user)) -> dict | None:
     owner_id, include_all = _owner_scope(user)
-    return latest_scan(owner_id=owner_id, include_all=include_all)
+    report = latest_scan(owner_id=owner_id, include_all=include_all)
+    if report:
+        binding = report.get("model_artifact") if isinstance(report, dict) else None
+        report_owner = binding.get("owner_id") if include_all and isinstance(binding, dict) else owner_id
+        _check_report_access(report, owner_id=report_owner, actor_id=int(user["id"]))
+    return report
+
+
+def _check_report_access(report: dict, *, owner_id: int | None, actor_id: int | None = None) -> None:
+    try:
+        with model_access_context(actor_id, "report_access", owner_id=owner_id):
+            assert_report_artifact_integrity(report, owner_id=owner_id)
+            validate_report_evidence(report)
+    except ModelAccessLimitError:
+        raise
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=f"Report access blocked: {exc}") from exc
 
 
 def save_upload(upload: UploadFile, subdir: str, owner_id: int) -> Path:
+    safe_name = Path(upload.filename or "upload.bin").name
+    if subdir in {"models", "runtime_models"} and Path(safe_name).suffix.lower() != ".credora":
+        try:
+            validate_assessment_model_format(Path(safe_name))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     owner_root = ensure_within_directory(UPLOAD_DIR / str(owner_id), UPLOAD_DIR)
     folder = ensure_within_directory(owner_root / subdir, owner_root)
     folder.mkdir(parents=True, exist_ok=True)
-    safe_name = Path(upload.filename or "upload.bin").name
     path = ensure_within_directory(folder / f"{uuid4().hex}-{safe_name}", folder)
     upload_limit = MAX_ONNX_UPLOAD_BYTES if Path(safe_name).suffix.lower() == ".onnx" else MAX_UPLOAD_BYTES
+    if subdir in {"models", "runtime_models", "packages"}:
+        with BytesIO() as buffered:
+            while chunk := upload.file.read(min(1024 * 1024, upload_limit - buffered.tell() + 1)):
+                if buffered.tell() + len(chunk) > upload_limit:
+                    raise HTTPException(status_code=413, detail="Upload exceeds Credora size limit.")
+                buffered.write(chunk)
+            payload = buffered.getvalue()
+        try:
+            with model_access_context(owner_id, "model_upload", owner_id=owner_id):
+                write_model_bytes(path, payload, owner_id=owner_id)
+                register_or_verify_artifact(path, owner_id=owner_id, expected_sha256=hashlib.sha256(payload).hexdigest())
+        except ModelAccessLimitError:
+            raise
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return path
     bytes_written = 0
     upload_too_large = False
     with path.open("wb") as handle:
@@ -465,7 +583,10 @@ def scan_phase1(
             if not isinstance(metadata_payload, dict):
                 raise ValueError("Model metadata must be a JSON object.")
             if metadata_payload.get("input_type", "tabular") == "sequence" and model_path.suffix.lower() == ".onnx" and dataset_path.suffix.lower() == ".npz":
-                validate_sequence_compatibility(model_path, dataset_path, metadata_payload)
+                with model_access_context(owner_id, "sequence_preflight", owner_id=owner_id):
+                    validate_sequence_compatibility(model_path, dataset_path, metadata_payload)
+        except ModelAccessLimitError:
+            raise
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=400, detail=f"Sequence compatibility check failed: {exc}") from exc
     try:
@@ -480,6 +601,8 @@ def scan_phase1(
             execution_device=execution_device,
             allow_cpu_fallback=allow_cpu_fallback,
         )
+    except ModelAccessLimitError:
+        raise
     except (OSError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return report.to_dict()
@@ -539,7 +662,10 @@ def integrity_check(
     model_path = save_upload(model, "runtime_models", owner_id)
     metadata_path = save_upload(metadata, "runtime_metadata", owner_id)
     try:
-        return asdict(run_integrity_cycle(model_path, metadata_path, owner_id=owner_id))
+        with model_access_context(owner_id, "runtime_integrity", owner_id=owner_id):
+            return asdict(run_integrity_cycle(model_path, metadata_path, owner_id=owner_id))
+    except ModelAccessLimitError:
+        raise
     except (ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -583,7 +709,8 @@ def verify_package(
     owner_root = ensure_within_directory(UPLOAD_DIR / str(owner_id), UPLOAD_DIR)
     extract_dir = ensure_within_directory(owner_root / "verified_packages" / package_path.stem, owner_root)
     try:
-        verified = verify_model_package(package_path, key_path, extract_dir)
+        with model_access_context(owner_id, "package_verification", owner_id=owner_id):
+            verified = verify_model_package(package_path, key_path, extract_dir)
         return {
             "verified": True,
             "manifest": verified.manifest,
@@ -591,6 +718,8 @@ def verify_package(
             "metadata_path": str(verified.metadata_path),
             "requirements_path": str(verified.requirements_path),
         }
+    except ModelAccessLimitError:
+        raise
     except (ModelPackageError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

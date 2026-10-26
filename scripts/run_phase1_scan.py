@@ -11,11 +11,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.config import DATA_DIR, REPORT_DIR
+from core.artifact_integrity import (
+    register_or_verify_artifact,
+    assert_artifact_integrity,
+    assert_report_artifact_integrity,
+    assert_registered_artifacts_in_directory,
+)
 from core.assessment_insights import build_analysis_trace, build_remediation_plan
 from core.dataset_references import validate_training_dataset_references
 from core.db import latest_model_by_name, register_model, save_scan
-from core.hashing import sha256_file
+from core.model_access import model_operation
+from core.model_storage import require_model_encryption_key
 from core.report_schema import Finding, ModuleResult, TrustReport
+from core.report_evidence import validate_report_evidence
 from core.report_signing import sign_report_dict
 from core.security import ensure_within_directory, slugify_filename
 from core.sequence_validation import validate_sequence_compatibility
@@ -59,6 +67,7 @@ def _sequence_not_applicable(module: str, capability: str) -> ModuleResult:
             "info",
             "The assessment records this limitation explicitly; it was not silently skipped or treated as passed.",
             "Use the result as a documented limitation until the sequence-specific module is implemented.",
+            metric="details.reason",
         )],
         details={
             "input_type": "sequence",
@@ -87,6 +96,7 @@ def _apply_raw_model_cap(result: ModuleResult, metadata: dict[str, Any]) -> Modu
         "medium",
         f"Unsigned .joblib, .pkl, and .onnx uploads cannot score above {RAW_MODEL_TRUST_CAP:.0f}/100.",
         "Package and sign the model with Credora before requesting deployment approval.",
+        metric="details.raw_model_trust_cap",
     ))
     result.details["raw_model_trust_cap"] = RAW_MODEL_TRUST_CAP
     return result
@@ -114,6 +124,7 @@ def _attach_security_gate_context(
             "The Security Gate failed. This score remains useful for assessment and drift tracking, "
             "but it cannot be used as deployment approval.",
             "Resolve every failed Security Gate check and rerun the assessment before deployment.",
+            metric="details.failed_security_checks",
         ))
     return trust_result
 
@@ -137,6 +148,7 @@ def _augment_trusted_metadata(metadata: dict[str, Any], model_path: Path, packag
     return metadata
 
 
+@model_operation("scan")
 def run_phase1_scan(
     model_path: str | Path,
     dataset_path: str | Path,
@@ -153,6 +165,7 @@ def run_phase1_scan(
     execution_device: str | None = None,
     allow_cpu_fallback: bool = False,
 ) -> TrustReport:
+    require_model_encryption_key()
     def progress(level: str, message: str) -> None:
         if progress_callback:
             progress_callback(level, message)
@@ -178,19 +191,37 @@ def run_phase1_scan(
     requirements_path = Path(requirements_path)
     metadata_path = Path(metadata_path) if metadata_path else None
 
+    from core.assessment_inputs import prepare_assessment_inputs, validate_assessment_model_format
+
+    if model_path.suffix.lower() != ".credora":
+        validate_assessment_model_format(model_path)
+    # Keep intake identity separate from release/trust baselines by model name.
+    source_artifact = register_or_verify_artifact(model_path, owner_id=owner_id)
+
     if model_path.suffix.lower() == ".credora":
         if trusted_public_key_path is None:
             raise ValueError("A trusted public key is required to scan a signed .credora package.")
         from core.model_package import verify_model_package
 
         package_root = ensure_within_directory(DATA_DIR / "uploads" / (str(owner_id) if owner_id is not None else "shared"), DATA_DIR)
-        extract_dir = ensure_within_directory(package_root / "verified_packages" / model_path.stem, package_root)
+        extract_dir = ensure_within_directory(package_root / "verified_packages" / str(source_artifact["id"]), package_root)
+        assert_registered_artifacts_in_directory(extract_dir, owner_id=owner_id)
         verified = verify_model_package(model_path, trusted_public_key_path, extract_dir)
         model_path = verified.model_path
         requirements_path = verified.requirements_path
         metadata_path = verified.metadata_path
         package_manifest = verified.manifest
         progress("Level 0 - Intake", "Completed: verified signed Credora package and extracted trusted artifacts.")
+
+    validate_assessment_model_format(model_path)
+    model_artifact = register_or_verify_artifact(model_path, owner_id=owner_id)
+    public_binding = {
+        key: model_artifact[key] for key in ("id", "owner_id", "sha256")
+    }
+    if model_artifact["id"] != source_artifact["id"]:
+        public_binding["source_artifact"] = {
+            key: source_artifact[key] for key in ("id", "owner_id", "sha256")
+        }
 
     if metadata_path and Path(metadata_path).exists():
         metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
@@ -205,8 +236,6 @@ def run_phase1_scan(
         metadata = _augment_trusted_metadata({}, model_path, package_manifest, owner_id=owner_id)
         progress("Level 0 - Intake", "Completed with warning: no metadata file was supplied; identity and feature checks will be limited.")
 
-    from core.assessment_inputs import prepare_assessment_inputs
-
     metadata = validate_training_dataset_references(metadata, owner_id=owner_id)
     prepared_root = ensure_within_directory(
         DATA_DIR / "uploads" / (str(owner_id) if owner_id is not None else "shared") / "prepared" / uuid4().hex,
@@ -217,12 +246,7 @@ def run_phase1_scan(
         flow_labels_path=Path(flow_labels_path) if flow_labels_path else None,
         execution_device=execution_device, allow_cpu_fallback=allow_cpu_fallback,
     )
-    if prepared.model_path != model_path:
-        if package_manifest is not None:
-            raise ValueError("Native conversion changes the artifact; package and sign the converted ONNX model before release.")
-        metadata = _augment_trusted_metadata(prepared.metadata, prepared.model_path, None, owner_id=owner_id)
-    else:
-        metadata = prepared.metadata
+    metadata = prepared.metadata
     model_path, dataset_path = prepared.model_path, prepared.dataset_path
     if prepared.provenance or execution_device is not None or allow_cpu_fallback:
         prepared_root.mkdir(parents=True, exist_ok=True)
@@ -242,6 +266,7 @@ def run_phase1_scan(
         )
 
     results: list[ModuleResult] = []
+    assert_artifact_integrity(model_artifact, owner_id=owner_id)
     results.append(run_step("Level 1 - Integrity", "calculating the artifact hash and checking type, signature metadata, and size.", lambda: verify_model(model_path, metadata)))
     results.append(run_step("Level 2 - Supply Chain", "auditing declared packages and known dependency vulnerabilities.", lambda: scan_dependencies(requirements_path, metadata)))
     results.append(run_step("Level 3 - Classifier Performance", "running every labeled flow through the model and calculating per-class metrics.", lambda: evaluate_classifier(model_path, dataset_path, metadata)))
@@ -319,6 +344,9 @@ def run_phase1_scan(
     execution_evidence["scope_note"] = "Observed execution evidence covers classifier evaluation, not every inference in every assessment stage."
     report.execution = execution_evidence
     report.input_provenance = prepared.provenance
+    report.model_artifact = public_binding
+    validate_report_evidence(report)
+    assert_report_artifact_integrity(report.to_dict(), owner_id=owner_id)
     output_path = _safe_report_path(model_name, "phase3_trust_report.json", owner_id=owner_id)
 
     docx_path = None
@@ -353,7 +381,10 @@ def run_phase1_scan(
         report.docx_report_path = str(docx_path)
     report.execution = execution_evidence
     report.input_provenance = prepared.provenance
+    report.model_artifact = public_binding
     report_dict = report.to_dict()
+    validate_report_evidence(report_dict)
+    assert_report_artifact_integrity(report_dict, owner_id=owner_id)
     if report_signing_private_key_path:
         report_dict = sign_report_dict(report_dict, report_signing_private_key_path, signer=report_signer)
     save_json(output_path, report_dict)
@@ -368,7 +399,7 @@ def run_phase1_scan(
         dataset_path=dataset_path,
         requirements_path=requirements_path,
         metadata_path=metadata_path,
-        sha256=sha256_file(model_path),
+        sha256=model_artifact["sha256"],
         owner_id=owner_id,
         input_type=input_type,
     )

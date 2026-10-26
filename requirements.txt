@@ -6,7 +6,8 @@ pydantic
 python-dotenv
 
 # Dashboard
-streamlit
+# Deferred report downloads must recheck artifact integrity at click time.
+streamlit>=1.59.2
 plotly
 
 # Machine learning and data processing

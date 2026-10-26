@@ -20,6 +20,11 @@ def run_isolated_python(
     """Run project Python code in the same bounded subprocess pattern used for model loading."""
     project_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
+    from core import db
+    from core.model_access import access_environment
+
+    env.update(access_environment())
+    env["CREDORA_MODEL_ACCESS_DB_PATH"] = str(db.DB_PATH.resolve())
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
         str(project_root)

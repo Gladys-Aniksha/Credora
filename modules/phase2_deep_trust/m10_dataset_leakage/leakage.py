@@ -46,7 +46,7 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
             "warning",
             65,
             "Training baseline was not available, so holdout leakage could not be verified.",
-            [Finding("dataset_leakage", "Training baseline unavailable", "medium", "Credora could not compare the uploaded test file against a training/baseline dataset.", "Provide training_dataset_path metadata that points to the original training split or a trusted baseline sample.")],
+            [Finding("dataset_leakage", "Training baseline unavailable", "medium", "Credora could not compare the uploaded test file against a training/baseline dataset.", "Provide training_dataset_path metadata that points to the original training split or a trusted baseline sample.", metric="details.training_dataset_available")],
             {"training_dataset_available": False},
         )
 
@@ -64,32 +64,32 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
             test_f1 = float(f1_score(test.labels.astype(str), pd.Series(test_pred).astype(str), average="weighted", zero_division=0))
             gap = train_f1 - test_f1
         except Exception as exc:  # noqa: BLE001
-            return ModuleResult("dataset_leakage", "fail", 0, "Sequence leakage check could not run.", [Finding("dataset_leakage", "Sequence leakage check failed", "high", str(exc), "Provide compatible training and test NPZ files.")])
+            return ModuleResult("dataset_leakage", "fail", 0, "Sequence leakage check could not run.", [Finding("dataset_leakage", "Sequence leakage check failed", "high", str(exc), "Provide compatible training and test NPZ files.", metric="details.error")], {"error": str(exc)})
         score = 100.0
         if overlap >= 0.20:
             score -= 45
-            findings.append(Finding("dataset_leakage", "Possible sequence holdout leakage", "high", f"{overlap:.1%} of test sequences also appear in training.", "Rebuild the holdout with independent sequences."))
+            findings.append(Finding("dataset_leakage", "Possible sequence holdout leakage", "high", f"{overlap:.1%} of test sequences also appear in training.", "Rebuild the holdout with independent sequences.", metric="details.feature_overlap_rate"))
         elif overlap >= 0.05:
             score -= 22
-            findings.append(Finding("dataset_leakage", "Small sequence overlap detected", "medium", f"{overlap:.1%} of test sequences overlap training.", "Remove duplicate sequences before release evaluation."))
+            findings.append(Finding("dataset_leakage", "Small sequence overlap detected", "medium", f"{overlap:.1%} of test sequences overlap training.", "Remove duplicate sequences before release evaluation.", metric="details.feature_overlap_rate"))
         else:
-            findings.append(Finding("dataset_leakage", "No exact sequence leakage detected", "info", "Test sequence hashes did not exactly match training sequence hashes."))
+            findings.append(Finding("dataset_leakage", "No exact sequence leakage detected", "info", "Test sequence hashes did not exactly match training sequence hashes.", metric="details.feature_overlap_rate"))
         if gap > 0.15:
             score -= 20
-            findings.append(Finding("dataset_leakage", "Large sequence generalization gap", "medium", f"Training F1 is {train_f1:.3f}; test F1 is {test_f1:.3f}.", "Investigate overfitting and collect a harder holdout."))
+            findings.append(Finding("dataset_leakage", "Large sequence generalization gap", "medium", f"Training F1 is {train_f1:.3f}; test F1 is {test_f1:.3f}.", "Investigate overfitting and collect a harder holdout.", metric="details.generalization_gap"))
         return ModuleResult("dataset_leakage", "pass" if score >= 80 else "warning" if score >= 55 else "fail", round(max(score, 0.0), 2), f"Compared {len(test.features)} test sequence(s) with {len(train.features)} training sequence(s).", findings, {"input_type": "sequence", "training_dataset_available": True, "training_dataset_path": str(train_path), "test_row_count": len(test.features), "training_row_count": len(train.features), "feature_overlap_rate": round(overlap, 4), "full_row_overlap_rate": round(overlap, 4), "train_f1": round(train_f1, 4), "test_f1": round(test_f1, 4), "generalization_gap": round(gap, 4)})
 
     try:
         train = pd.read_csv(train_path)
         test = pd.read_csv(dataset_path)
     except Exception as exc:  # noqa: BLE001
-        return ModuleResult("dataset_leakage", "fail", 0, "Dataset leakage check could not read the required CSV files.", [Finding("dataset_leakage", "Leakage check failed", "high", str(exc), "Verify that the training baseline and uploaded test dataset are readable CSV files.")])
+        return ModuleResult("dataset_leakage", "fail", 0, "Dataset leakage check could not read the required CSV files.", [Finding("dataset_leakage", "Leakage check failed", "high", str(exc), "Verify that the training baseline and uploaded test dataset are readable CSV files.", metric="details.error")], {"error": str(exc)})
 
     target_column = metadata.get("target_column", "label")
     feature_columns = metadata.get("expected_features") or [column for column in test.columns if column != target_column]
     common_features = [column for column in feature_columns if column in train.columns and column in test.columns]
     if not common_features:
-        return ModuleResult("dataset_leakage", "fail", 0, "No common feature columns were available for leakage analysis.", [Finding("dataset_leakage", "Feature mismatch", "critical", "The training and test datasets do not share the expected feature columns.", "Use compatible training and holdout datasets with the same feature schema.")])
+        return ModuleResult("dataset_leakage", "fail", 0, "No common feature columns were available for leakage analysis.", [Finding("dataset_leakage", "Feature mismatch", "critical", "The training and test datasets do not share the expected feature columns.", "Use compatible training and holdout datasets with the same feature schema.", metric="details.common_features")], {"common_features": common_features})
 
     train_feature_hashes = _row_fingerprints(train, common_features)
     test_feature_hashes = _row_fingerprints(test, common_features)
@@ -100,6 +100,7 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
     full_overlap_rate = len(_row_fingerprints(train, full_columns).intersection(_row_fingerprints(test, full_columns))) / max(len(test), 1)
 
     generalization_gap: float | None = None
+    performance_comparison_error: str | None = None
     if target_column in train.columns and target_column in test.columns:
         try:
             model = load_model_backend(model_path, metadata)
@@ -109,24 +110,25 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
             test_f1 = float(f1_score(test[target_column].astype(str), pd.Series(test_pred).astype(str), average="weighted", zero_division=0))
             generalization_gap = train_f1 - test_f1
         except Exception as exc:  # noqa: BLE001
-            findings.append(Finding("dataset_leakage", "Train/test performance comparison unavailable", "low", str(exc), "Keep feature metadata aligned so Credora can compare training and holdout performance."))
+            performance_comparison_error = str(exc)
+            findings.append(Finding("dataset_leakage", "Train/test performance comparison unavailable", "low", str(exc), "Keep feature metadata aligned so Credora can compare training and holdout performance.", metric="details.performance_comparison_error"))
 
     score = 100.0
     if feature_overlap_rate >= 0.20 or full_overlap_rate >= 0.10:
         score -= 45
-        findings.append(Finding("dataset_leakage", "Possible holdout leakage", "high", f"{feature_overlap_rate:.1%} of unique test feature rows also appear in the training baseline.", "Rebuild the split from raw data using group/time-aware separation, then rerun the scan on an untouched holdout file."))
+        findings.append(Finding("dataset_leakage", "Possible holdout leakage", "high", f"{feature_overlap_rate:.1%} of unique test feature rows also appear in the training baseline.", "Rebuild the split from raw data using group/time-aware separation, then rerun the scan on an untouched holdout file.", metric="details.feature_overlap_rate" if feature_overlap_rate >= 0.20 else "details.full_row_overlap_rate"))
     elif feature_overlap_rate >= 0.05 or full_overlap_rate > 0:
         score -= 22
-        findings.append(Finding("dataset_leakage", "Small train/test overlap detected", "medium", f"{feature_overlap_rate:.1%} of unique test feature rows overlap with training data.", "Remove duplicate or near-duplicate flows from the test set and keep a locked holdout dataset."))
+        findings.append(Finding("dataset_leakage", "Small train/test overlap detected", "medium", f"{feature_overlap_rate:.1%} of unique test feature rows overlap with training data.", "Remove duplicate or near-duplicate flows from the test set and keep a locked holdout dataset.", metric="details.feature_overlap_rate" if feature_overlap_rate >= 0.05 else "details.full_row_overlap_rate"))
     else:
-        findings.append(Finding("dataset_leakage", "No exact train/test row leakage detected", "info", "The uploaded test rows did not exactly match training feature rows."))
+        findings.append(Finding("dataset_leakage", "No exact train/test row leakage detected", "info", "The uploaded test rows did not exactly match training feature rows.", metric="details.feature_overlap_rate"))
 
     if generalization_gap is not None:
         if generalization_gap > 0.15:
             score -= 20
-            findings.append(Finding("dataset_leakage", "Large train/test performance gap", "medium", f"Training weighted F1 is {train_f1:.3f}, while test weighted F1 is {test_f1:.3f}.", "Investigate overfitting, class imbalance, and unstable features before claiming production accuracy."))
+            findings.append(Finding("dataset_leakage", "Large train/test performance gap", "medium", f"Training weighted F1 is {train_f1:.3f}, while test weighted F1 is {test_f1:.3f}.", "Investigate overfitting, class imbalance, and unstable features before claiming production accuracy.", metric="details.generalization_gap"))
         elif abs(generalization_gap) <= 0.05:
-            findings.append(Finding("dataset_leakage", "Train/test performance is consistent", "info", f"Training and test weighted F1 differ by {abs(generalization_gap):.3f}."))
+            findings.append(Finding("dataset_leakage", "Train/test performance is consistent", "info", f"Training and test weighted F1 differ by {abs(generalization_gap):.3f}.", metric="details.generalization_gap"))
 
     score = round(max(0.0, min(score, 100.0)), 2)
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
@@ -147,5 +149,6 @@ def check_dataset_leakage(model_path: str | Path, dataset_path: str | Path, meta
             "train_f1": round(train_f1, 4) if train_f1 is not None else None,
             "test_f1": round(test_f1, 4) if test_f1 is not None else None,
             "generalization_gap": round(generalization_gap, 4) if generalization_gap is not None else None,
+            "performance_comparison_error": performance_comparison_error,
         },
     )

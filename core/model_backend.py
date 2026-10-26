@@ -16,6 +16,7 @@ from core.config import (
 )
 from core.execution_provider import EVIDENCE_PREFIX, OnnxExecution, execution_policy
 from core.model_loading import load_checked_model
+from core.model_storage import model_size
 from core.onnx_safety import validate_onnx_model
 from core.process_isolation import run_isolated_python
 from core.sequence_data import validate_sequence_metadata
@@ -104,7 +105,7 @@ class OnnxBackend(ModelBackend):
 class SequenceOnnxBackend(ModelBackend):
     def __init__(self, path: str | Path, metadata: dict[str, Any]):
         self.path = Path(path).resolve()
-        if self.path.stat().st_size > MAX_SEQUENCE_MODEL_BYTES:
+        if model_size(self.path) > MAX_SEQUENCE_MODEL_BYTES:
             raise ValueError("Sequence ONNX model exceeds the configured size limit.")
         self.metadata = validate_sequence_metadata(metadata)
         self._execution_policy = execution_policy(self.metadata)

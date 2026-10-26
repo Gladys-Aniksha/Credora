@@ -180,11 +180,10 @@ def test_shipped_sequence_fixture_roots_approved_by_default(project, directory):
     assert result["training_dataset_path"] == reference
 
 
-def test_native_cnn_derives_sequence_format_before_conversion(project):
+def test_sequence_format_is_explicit_in_exported_model_metadata(project):
     result = refs.validate_training_dataset_references(
         {
-            "framework": "pytorch",
-            "architecture": "cnn1d",
+            "input_type": "sequence",
             "training_dataset_path": "data/processed/train.npz",
         },
         owner_id=7,

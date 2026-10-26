@@ -42,8 +42,8 @@ def _torch_dependency():
         import torch
     except ImportError as exc:
         raise RuntimeError(
-            "--trained requires development-only PyTorch; install requirements-model-build.txt "
-            "in a development environment. The default builder does not need Torch."
+            "--trained requires development-only PyTorch; install torch in a separate "
+            "development environment. The default builder does not need Torch."
         ) from exc
     return torch
 

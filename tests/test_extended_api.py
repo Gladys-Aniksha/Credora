@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from fastapi import HTTPException, UploadFile
 
 
 def multipart(files, fields=None):
@@ -117,9 +119,12 @@ def test_unauthenticated_extended_scan_cannot_persist_or_execute(api, monkeypatc
 
 @pytest.mark.parametrize("model_name,input_type", [
     ("model.onnx", "sequence"), ("model.onnx", "tabular"),
-    ("weights.safetensors", "sequence"), ("model.weights.h5", "tabular"),
+    ("model.joblib", "tabular"), ("model.pkl", "tabular"),
+    ("model.credora", "sequence"), ("model.credora", "tabular"),
 ])
 def test_extended_scan_forwards_settings_and_isolates_owners(api, monkeypatch, model_name, input_type):
+    from core.model_storage import MAGIC, read_model_bytes
+
     scan = Mock(return_value=SimpleNamespace(to_dict=lambda: {"model_name": "mock", "trust_score": 42}))
     preflight = Mock(side_effect=AssertionError("PCAP must be converted before NPZ preflight"))
     monkeypatch.setattr(api, "run_phase1_scan", scan)
@@ -145,7 +150,11 @@ def test_extended_scan_forwards_settings_and_isolates_owners(api, monkeypatch, m
         for name, path in paths.items():
             assert isinstance(path, Path)
             assert path.is_relative_to(owner_root)
-            assert path.read_bytes() == files[name][1]
+            if name == "model":
+                assert path.read_bytes().startswith(MAGIC)
+                assert read_model_bytes(path) == files[name][1]
+            else:
+                assert path.read_bytes() == files[name][1]
         saved_by_owner.append(set(paths.values()))
     assert saved_by_owner[0].isdisjoint(saved_by_owner[1])
     assert scan.call_count == 2
@@ -194,3 +203,29 @@ def test_invalid_metadata_returns_400_before_scan(api, monkeypatch, contents):
     assert status == 400
     assert "detail" in response
     scan.assert_not_called()
+
+
+@pytest.mark.parametrize("filename", [
+    "weights.safetensors", "model.weights.h5", "model.h5", "model.keras",
+    "model.pt", "model.PTH", "model.ckpt",
+])
+def test_checkpoint_upload_requires_onnx_export_before_persistence(api, monkeypatch, filename):
+    api.app.dependency_overrides[api.get_current_user] = lambda: {"id": 41, "role": "uploader"}
+    scan = Mock()
+    monkeypatch.setattr(api, "run_phase1_scan", scan)
+    status, response = post(api.app, evidence(filename))
+    assert status == 400
+    assert "Export" in response["detail"]
+    assert "ONNX" in response["detail"]
+    scan.assert_not_called()
+    assert not api.UPLOAD_DIR.exists()
+
+
+@pytest.mark.parametrize("subdir", ["models", "runtime_models"])
+def test_model_storage_rejects_checkpoint_even_outside_scan_route(api, subdir):
+    upload = UploadFile(filename="model.safetensors", file=BytesIO(b"checkpoint"))
+    with pytest.raises(HTTPException) as caught:
+        api.save_upload(upload, subdir, owner_id=41)
+    assert caught.value.status_code == 400
+    assert "ONNX" in caught.value.detail
+    assert not api.UPLOAD_DIR.exists()

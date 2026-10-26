@@ -277,10 +277,10 @@ def _packet(frame: bytes):
             if length < (12 if protocol == 51 else 8) or start + length > size:
                 raise PcapIngestionError("Invalid IPv6 extension length.")
             protocol, start = ip[start], start + length
-        if protocol in (44, 50):
-            raise PcapIngestionError("IPv6 fragments/ESP are unsupported.")
     else:
         return None
+    if protocol == 50 or (version == 6 and protocol == 44):
+        raise PcapIngestionError("IP fragments/ESP are unsupported.")
     if protocol not in (6, 17):
         return None
     transport = ip[start:size]

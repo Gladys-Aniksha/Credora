@@ -15,6 +15,7 @@ class Finding:
     severity: Severity
     description: str
     recommendation: str = ""
+    metric: str = ""
 
 
 @dataclass
@@ -42,6 +43,7 @@ class TrustReport:
     input_type: str = "tabular"
     execution: dict[str, Any] = field(default_factory=dict)
     input_provenance: dict[str, Any] = field(default_factory=dict)
+    model_artifact: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(
@@ -70,4 +72,8 @@ class TrustReport:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        from core.report_evidence import validate_report_evidence
+
+        report = asdict(self)
+        validate_report_evidence(report)
+        return report

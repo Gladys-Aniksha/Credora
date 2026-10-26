@@ -68,7 +68,8 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "fail",
             0,
             "Behavior analysis could not run.",
-            [Finding("behavior_analysis", "Behavior analysis failed", "high", str(exc), "Verify that the model and test CSV are compatible.")],
+            [Finding("behavior_analysis", "Behavior analysis failed", "high", str(exc), "Verify that the model and test CSV are compatible.", metric="details.error")],
+            {"error": str(exc)},
         )
 
     if input_type != "sequence":
@@ -79,7 +80,8 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "fail",
                 0,
                 "Target column missing for behavior analysis.",
-                [Finding("behavior_analysis", "Missing target column", "critical", f"Dataset does not contain {target_column}.")],
+                [Finding("behavior_analysis", "Missing target column", "critical", f"Dataset does not contain {target_column}.", metric="details.target_column_present")],
+                {"target_column": target_column, "target_column_present": False},
             )
 
         feature_columns = metadata.get("expected_features") or [column for column in data.columns if column != target_column]
@@ -90,7 +92,8 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "fail",
                 0,
                 "Behavior analysis could not run because features are missing.",
-                [Finding("behavior_analysis", "Feature mismatch", "critical", f"Missing features: {', '.join(missing_features)}", "Upload a dataset with the model's expected feature columns.")],
+                [Finding("behavior_analysis", "Feature mismatch", "critical", f"Missing features: {', '.join(missing_features)}", "Upload a dataset with the model's expected feature columns.", metric="details.missing_features")],
+                {"missing_features": missing_features},
             )
 
         x_test = data[feature_columns]
@@ -136,7 +139,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "Weak malicious/suspicious class detection",
             "high",
             f"The model is weak on security-sensitive class(es): {labels_text}.",
-            f"Add more labeled {labels_text} flows, tune class weights, and set a deployment gate that blocks release until recall for these classes is at least 0.90.",
+            f"Add more labeled {labels_text} flows, tune class weights, and set a deployment gate that blocks release until recall for these classes is at least 0.90.", metric="details.weak_classes",
         ))
     elif malicious_labels:
         findings.append(Finding(
@@ -144,7 +147,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "Security-sensitive class detection is strong",
             "info",
             f"The model correctly handles monitored class(es): {', '.join(malicious_labels)} on this test set.",
-            "Keep a separate malicious/suspicious holdout set and retest before every deployment.",
+            "Keep a separate malicious/suspicious holdout set and retest before every deployment.", metric="details.class_metrics",
         ))
 
     if weak_classes and not malicious_weak:
@@ -155,7 +158,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "Class-specific behavior weakness",
             "medium",
             f"The weakest class is {weakest['class']} with F1 {weakest['f1']}.",
-            f"Collect more {weakest['class']} samples and inspect flows that are confused with nearby classes.",
+            f"Collect more {weakest['class']} samples and inspect flows that are confused with nearby classes.", metric="details.weak_classes",
         ))
 
     if confusion_pairs:
@@ -166,7 +169,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "Class confusion detected",
             "medium",
             f"{pair['actual']} is most often misclassified as {pair['predicted']} ({pair['count']} flow(s)).",
-            f"Add targeted features that separate {pair['actual']} from {pair['predicted']}, then retrain and compare the confusion matrix.",
+            f"Add targeted features that separate {pair['actual']} from {pair['predicted']}, then retrain and compare the confusion matrix.", metric="details.confusion_pairs",
         ))
 
     if confidence.get("available"):
@@ -178,7 +181,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "Many low-confidence predictions",
                 "medium",
                 f"{low_rate:.1%} of predictions have confidence below 0.65.",
-                "Add an abstain/review threshold: if max class probability is below 0.65, route the flow to manual review instead of auto-deploying the decision.",
+                "Add an abstain/review threshold: if max class probability is below 0.65, route the flow to manual review instead of auto-deploying the decision.", metric="details.confidence.low_confidence_rate",
             ))
         else:
             findings.append(Finding(
@@ -186,7 +189,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "Prediction confidence is stable",
                 "info",
                 f"Mean confidence is {confidence['mean_confidence']}; low-confidence rate is {low_rate:.1%}.",
-                "Keep monitoring confidence drift in production traffic.",
+                "Keep monitoring confidence drift in production traffic.", metric="details.confidence.low_confidence_rate",
             ))
     else:
         score -= 8
@@ -195,7 +198,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "Prediction confidence unavailable",
             "low",
             "The model does not expose predict_proba(), so confidence-based review thresholds cannot be assessed.",
-            "Use a classifier with probability estimates or calibrate the model before deployment.",
+            "Use a classifier with probability estimates or calibrate the model before deployment.", metric="details.confidence.available",
         ))
 
     if top_features:
@@ -208,7 +211,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "Behavior relies heavily on one traffic pattern",
                 "medium",
                 f"The model's strongest behavior signal is {top['feature']} with importance {top['importance']}.",
-                f"Validate that {top['feature']} cannot be spoofed easily and add alternate timing/byte-ratio features before deployment.",
+                f"Validate that {top['feature']} cannot be spoofed easily and add alternate timing/byte-ratio features before deployment.", metric="details.top_features",
             ))
         elif top3_sum > 0.75:
             score -= 7
@@ -217,7 +220,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "Behavior depends on a narrow feature group",
                 "low",
                 f"The top three features contribute {top3_sum:.2f} of total model importance.",
-                "Test on traffic captured from a different network before deployment.",
+                "Test on traffic captured from a different network before deployment.", metric="details.top_3_importance",
             ))
         else:
             findings.append(Finding(
@@ -225,11 +228,11 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
                 "Behavior uses distributed evidence",
                 "info",
                 "Feature importance is not dominated by a single flow pattern.",
-                "Preserve this feature diversity when retraining future versions.",
+                "Preserve this feature diversity when retraining future versions.", metric="details.top_features",
             ))
 
     if not findings:
-        findings.append(Finding("behavior_analysis", "No behavioral issues detected", "info", "The model behavior is stable on the uploaded test data."))
+        findings.append(Finding("behavior_analysis", "No behavioral issues detected", "info", "The model behavior is stable on the uploaded test data.", metric="details.class_metrics"))
 
     score = round(max(0.0, min(score, 100.0)), 2)
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
@@ -247,6 +250,7 @@ def analyze_behavior(model_path: str | Path, dataset_path: str | Path, metadata:
             "malicious_or_suspicious_classes": malicious_labels,
             "confusion_pairs": confusion_pairs[:10],
             "top_features": top_features[:10],
+            "top_3_importance": sum(item["importance"] for item in top_features[:3]),
             "class_metrics": {label: report.get(label, {}) for label in labels},
             "input_type": input_type,
         },

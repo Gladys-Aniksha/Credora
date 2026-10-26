@@ -31,11 +31,11 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
         model = load_model_backend(model_file, metadata)
         data = pd.read_csv(data_file)
     except Exception as exc:  # noqa: BLE001
-        return ModuleResult("robustness_testing", "fail", 0, "Robustness test could not run.", [Finding("robustness_testing", "Robustness test failed", "high", str(exc), "Verify that model and CSV files are compatible.")])
+        return ModuleResult("robustness_testing", "fail", 0, "Robustness test could not run.", [Finding("robustness_testing", "Robustness test failed", "high", str(exc), "Verify that model and CSV files are compatible.", metric="details.error")], {"error": str(exc)})
 
     target_column = metadata.get("target_column", "label")
     if target_column not in data.columns:
-        return ModuleResult("robustness_testing", "fail", 0, "Target column missing for robustness test.", [Finding("robustness_testing", "Missing target column", "critical", f"Dataset does not contain {target_column}.")])
+        return ModuleResult("robustness_testing", "fail", 0, "Target column missing for robustness test.", [Finding("robustness_testing", "Missing target column", "critical", f"Dataset does not contain {target_column}.", metric="details.target_column_present")], {"target_column": target_column, "target_column_present": False})
 
     feature_columns = metadata.get("expected_features") or [column for column in data.columns if column != target_column]
     feature_columns = [column for column in feature_columns if column in data.columns]
@@ -44,7 +44,7 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
     numeric_columns = X.select_dtypes(include=["number", "bool"]).columns.tolist()
 
     if not numeric_columns:
-        return ModuleResult("robustness_testing", "warning", 60, "No numeric traffic features available for perturbation.", [Finding("robustness_testing", "No perturbable features", "medium", "Robustness testing needs numeric flow metadata features.", "Use numeric flow features such as duration, packet count, byte count, and inter-arrival time.")])
+        return ModuleResult("robustness_testing", "warning", 60, "No numeric traffic features available for perturbation.", [Finding("robustness_testing", "No perturbable features", "medium", "Robustness testing needs numeric flow metadata features.", "Use numeric flow features such as duration, packet count, byte count, and inter-arrival time.", metric="details.perturbed_features")], {"perturbed_features": numeric_columns})
 
     baseline_predictions = model.predict(X)
     baseline_accuracy = accuracy_score(y_true, baseline_predictions)
@@ -87,11 +87,11 @@ def test_robustness(model_path: str | Path, dataset_path: str | Path, metadata: 
     score = round(max(0.0, 100.0 - (f1_drop * 170) - ((1 - prediction_stability) * 65)), 2)
     if f1_drop > 0.15 or prediction_stability < 0.75:
         severity = "high"
-        findings.append(Finding("robustness_testing", "Model is sensitive to small traffic changes", severity, f"F1 dropped by {f1_drop:.3f} and prediction stability was {prediction_stability:.3f}.", "Retrain with more varied traffic samples or add robustness testing before deployment."))
+        findings.append(Finding("robustness_testing", "Model is sensitive to small traffic changes", severity, f"F1 dropped by {f1_drop:.3f} and prediction stability was {prediction_stability:.3f}.", "Retrain with more varied traffic samples or add robustness testing before deployment.", metric="details.f1_drop" if f1_drop > 0.15 else "details.prediction_stability"))
     elif f1_drop > 0.06 or prediction_stability < 0.9:
-        findings.append(Finding("robustness_testing", "Moderate robustness risk", "medium", f"F1 dropped by {f1_drop:.3f} under small feature perturbations.", "Review features that are unstable in real encrypted traffic."))
+        findings.append(Finding("robustness_testing", "Moderate robustness risk", "medium", f"F1 dropped by {f1_drop:.3f} under small feature perturbations.", "Review features that are unstable in real encrypted traffic.", metric="details.f1_drop" if f1_drop > 0.06 else "details.prediction_stability"))
     else:
-        findings.append(Finding("robustness_testing", "Robust under small feature changes", "info", f"Perturbed F1 remained {perturbed_f1:.3f} with {prediction_stability:.3f} prediction stability."))
+        findings.append(Finding("robustness_testing", "Robust under small feature changes", "info", f"Perturbed F1 remained {perturbed_f1:.3f} with {prediction_stability:.3f} prediction stability.", metric="details.perturbed_f1"))
 
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
     return ModuleResult(

@@ -1,6 +1,0 @@
-# Container-only decoders and standard ONNX graph generation. No pickle loaders,
-# native framework runtime, keras custom objects, or main-server dependencies.
-numpy==1.26.4
-onnx==1.17.0
-safetensors==0.5.3
-h5py==3.12.1

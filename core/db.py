@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
@@ -9,7 +10,7 @@ from typing import Any
 
 from core.config import DATA_DIR
 
-DB_PATH = DATA_DIR / "registry" / "credora_registry.sqlite3"
+DB_PATH = Path(os.environ.get("CREDORA_MODEL_ACCESS_DB_PATH", str(DATA_DIR / "registry" / "credora_registry.sqlite3")))
 OWNER_TABLES = ("model_registry", "scan_history", "runtime_alerts", "drift_windows", "integrity_checks")
 ROLES = {"uploader", "reviewer", "admin"}
 
@@ -64,8 +65,37 @@ def _bootstrap_admin_user(conn: sqlite3.Connection) -> int:
     return int(cursor.lastrowid)
 
 
+def _init_artifact_registry(conn: sqlite3.Connection) -> None:
+    # Kept outside OWNER_TABLES: NULL artifacts must never be reassigned to admin.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS model_artifact_registry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id INTEGER REFERENCES users(id),
+            artifact_path TEXT NOT NULL,
+            resolved_path TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_artifact_owner_path
+        ON model_artifact_registry(owner_id, artifact_path) WHERE owner_id IS NOT NULL
+    """)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_artifact_shared_path
+        ON model_artifact_registry(artifact_path) WHERE owner_id IS NULL
+    """)
+    for operation in ("UPDATE", "DELETE"):
+        conn.execute(f"""
+            CREATE TRIGGER IF NOT EXISTS immutable_artifact_{operation.lower()}
+            BEFORE {operation} ON model_artifact_registry
+            BEGIN SELECT RAISE(ABORT, 'Model artifact registrations are immutable'); END
+        """)
+
+
 def init_db() -> None:
     with connect() as conn:
+        _init_artifact_registry(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (

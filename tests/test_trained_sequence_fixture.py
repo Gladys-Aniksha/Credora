@@ -82,7 +82,7 @@ def test_trained_missing_dependency_is_actionable(tmp_path, monkeypatch):
         builder.main()
     assert error.value.code == 1
     assert not list(tmp_path.iterdir())
-    with pytest.raises(RuntimeError, match="requirements-model-build.txt"):
+    with pytest.raises(RuntimeError, match="install torch in a separate"):
         builder.build_trained(tmp_path)
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from core.model_storage import model_size
 
 from core.hashing import sha256_file
 from core.report_schema import Finding, ModuleResult
@@ -13,7 +14,8 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
     if not path.exists() or not path.is_file():
         return ModuleResult(
             "runtime_integrity", "fail", 0, "Runtime integrity could not establish a model baseline.",
-            [Finding("runtime_integrity", "Runtime model missing", "critical", f"Model artifact not found: {path}", "Restore the approved artifact and block model serving until its hash is verified.")],
+            [Finding("runtime_integrity", "Runtime model missing", "critical", f"Model artifact not found: {path}", "Restore the approved artifact and block model serving until its hash is verified.", metric="details.artifact_available")],
+            details={"artifact_available": False},
         )
 
     actual_hash = sha256_file(path)
@@ -28,6 +30,7 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
             "runtime_integrity", "Runtime model hash changed", "critical",
             "The model artifact no longer matches its approved SHA-256 baseline.",
             "Stop model serving, restore the approved artifact, investigate the file change, and rotate the deployment only after re-signing it.",
+            metric="details.hash_matches",
         ))
     elif not expected_hash:
         score -= 35
@@ -35,12 +38,14 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
             "runtime_integrity", "No approved runtime hash", "high",
             "Runtime monitoring has no approved hash to compare with the deployed model.",
             "Register the reviewed model hash server-side or scan a signed Credora package before deployment.",
+            metric="details.expected_hash_available",
         ))
     else:
         findings.append(Finding(
             "runtime_integrity", "Runtime hash baseline established", "info",
             "The model artifact matches the approved SHA-256 value.",
             "Recheck this hash at service startup and on a scheduled runtime interval.",
+            metric="details.hash_matches",
         ))
 
     if not signature_valid:
@@ -49,6 +54,7 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
             "runtime_integrity", "Runtime signature evidence missing", "medium",
             "Credora did not verify a signed package for the deployed artifact.",
             "Sign the model manifest and verify the package before starting the model service.",
+            metric="details.signature_valid",
         ))
 
     score = round(max(0.0, score), 2)
@@ -58,13 +64,16 @@ def check_runtime_integrity(model_path: str | Path, metadata: dict | None = None
         summary="Compared the runtime model artifact with its approved integrity baseline.",
         findings=findings,
         details={
+            "artifact_available": True,
+            "expected_hash_available": bool(expected_hash),
+            "hash_matches": bool(expected_hash and expected_hash == actual_hash),
             "integrity_state": "verified" if expected_hash == actual_hash and signature_valid else "changed" if expected_hash else "unbaselined",
             "model_path": str(path.resolve()),
             "actual_sha256": actual_hash,
             "expected_sha256": expected_hash,
             "expected_sha256_source": metadata.get("_expected_sha256_source", "none"),
             "signature_valid": signature_valid,
-            "file_size_bytes": path.stat().st_size,
+            "file_size_bytes": model_size(path),
             "file_modified_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
             "checked_at": datetime.now(timezone.utc).isoformat(),
         },

@@ -168,6 +168,7 @@ def evaluate_security_gate(results: list[ModuleResult]) -> ModuleResult:
                     "critical",
                     f"Failed mandatory checks: {failed_names}.",
                     "Resolve every failed security check and rerun the complete assessment before deployment.",
+                    metric="details.failed_checks",
                 )
             ],
             details={

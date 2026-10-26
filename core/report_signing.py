@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from core.model_access import model_operation
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -98,9 +99,15 @@ def sign_report_dict(report: dict[str, Any], private_key_path: str | Path, signe
     return signed_report
 
 
+@model_operation("report.sign")
 def sign_report_file(report_path: str | Path, private_key_path: str | Path, signer: str | None = None, output_path: str | Path | None = None) -> Path:
+    from core.artifact_integrity import assert_report_artifact_integrity
+    from core.report_evidence import validate_report_evidence
+
     source = Path(report_path)
     report = json.loads(source.read_text(encoding="utf-8"))
+    validate_report_evidence(report)
+    assert_report_artifact_integrity(report)
     signed_report = sign_report_dict(report, private_key_path, signer=signer)
     target = Path(output_path) if output_path else source
     target.parent.mkdir(parents=True, exist_ok=True)

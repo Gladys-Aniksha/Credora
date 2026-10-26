@@ -83,16 +83,9 @@ def validate_training_dataset_references(
         shared_roots.append(root)
     result = dict(metadata)
     approved: dict[str, Path] = {}
-    # Native CNN metadata may omit input_type until conversion derives it.
-    default_input_type = (
-        "sequence"
-        if metadata.get("framework") == "pytorch"
-        and metadata.get("architecture") == "cnn1d"
-        else "tabular"
-    )
     suffix = (
         ".npz"
-        if metadata.get("input_type", default_input_type) == "sequence"
+        if metadata.get("input_type", "tabular") == "sequence"
         else ".csv"
     )
     for field in REFERENCE_FIELDS:
@@ -143,8 +136,7 @@ def validate_training_dataset_references(
         )
     for field, path in approved.items():
         result[field] = path.relative_to(project).as_posix()
-    # Native metadata has one canonical reference field; preserve the fallback
-    # alias across its allowlist by promoting an authorized baseline alias.
+    # Normalize either authorized baseline alias for downstream readers.
     if approved:
         result["training_dataset_path"] = (
             next(iter(approved.values())).relative_to(project).as_posix()

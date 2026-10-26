@@ -20,7 +20,7 @@ def run_onnx_worker(
     model_path: str, input_path: str | None, output_path: str | None,
     metadata: dict | None = None,
 ) -> None:
-    """Create and optionally execute an ONNX session inside a bounded child process."""
+    """Load/decrypt ONNX bytes and execute inside a bounded child; never stage a plaintext model."""
     import onnxruntime as ort
 
     validate_onnx_model(model_path)

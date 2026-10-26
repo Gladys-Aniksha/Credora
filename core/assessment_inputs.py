@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +16,14 @@ class PreparedAssessment:
     provenance: dict[str, Any]
 
 
+def validate_assessment_model_format(model_path: Path) -> None:
+    if model_path.suffix.lower() not in {".onnx", ".joblib", ".pkl"}:
+        raise ValueError(
+            "Unsupported model format. Export raw framework weights to ONNX (.onnx) "
+            "before uploading. Supported model artifacts are .onnx, .joblib, and .pkl."
+        )
+
+
 def prepare_assessment_inputs(
     model_path: Path,
     dataset_path: Path,
@@ -27,23 +34,11 @@ def prepare_assessment_inputs(
     execution_device: str | None = None,
     allow_cpu_fallback: bool = False,
 ) -> PreparedAssessment:
+    validate_assessment_model_format(model_path)
     if not isinstance(metadata, dict):
         raise ValueError("Model metadata must be a JSON object, not verification results or a list.")
     metadata = dict(metadata)
     provenance: dict[str, Any] = {}
-    native = model_path.suffix.lower() == ".safetensors" or model_path.name.lower().endswith(".weights.h5")
-    if native:
-        from core.native_import import import_native_model
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-        source_metadata = output_dir / "native-source-metadata.json"
-        source_metadata.write_text(json.dumps(metadata), encoding="utf-8")
-        imported = import_native_model(model_path, source_metadata, output_dir / "native")
-        model_path = imported.artifact_path
-        metadata = json.loads(imported.metadata_path.read_text(encoding="utf-8"))
-        provenance["model_conversion"] = metadata.get("conversion_provenance", {})
-    elif model_path.suffix.lower() in {".pt", ".pth", ".keras", ".h5"}:
-        raise ValueError("Unrestricted native checkpoints are not accepted. Use approved weights-only imports or ONNX.")
     if dataset_path.suffix.lower() in {".pcap", ".pcapng"}:
         from core.pcap_ingestion import ingest_pcap
 

@@ -7,7 +7,9 @@ from typing import Any
 import onnx
 from google.protobuf.message import DecodeError
 from onnx import TensorProto
+from core.model_access import ModelAccessLimitError
 
+from core.model_storage import read_model_bytes
 
 ALLOWED_ONNX_DOMAINS = frozenset({"", "ai.onnx", "ai.onnx.ml"})
 
@@ -52,10 +54,26 @@ def _tensor_contract(value: Any) -> OnnxTensorContract:
 
 def validate_onnx_model(path: str | Path) -> OnnxSafetyReport:
     """Validate an ONNX graph without resolving external tensor data."""
-    model_path = Path(path)
     try:
-        model = onnx.load(str(model_path), load_external_data=False)
+        model = onnx.load_model_from_string(read_model_bytes(path))
+        # Tensor attributes, subgraphs, functions and sparse tensors can also
+        # reference server files. Reject them before checker/runtime processing.
+        pending = [model]
+        while pending:
+            message = pending.pop()
+            if isinstance(message, TensorProto) and (
+                message.data_location == TensorProto.EXTERNAL or message.external_data
+            ):
+                raise UnsafeOnnxError("ONNX external tensor data is not allowed.")
+            for descriptor, value in message.ListFields():
+                if descriptor.message_type is not None:
+                    if descriptor.is_repeated:
+                        pending.extend(value)
+                    else:
+                        pending.append(value)
         onnx.checker.check_model(model)
+    except ModelAccessLimitError:
+        raise
     except (onnx.checker.ValidationError, DecodeError, OSError, ValueError) as exc:
         raise UnsafeOnnxError(f"ONNX structure validation failed: {exc}") from exc
 

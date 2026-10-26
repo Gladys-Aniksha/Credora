@@ -26,7 +26,10 @@ def validate_sequence_model_contract(
     if graph_length is not None and graph_length != contract["max_sequence_length"]:
         raise SequenceDataError(
             f"Model expects sequence length {graph_length}, but metadata declares "
-            f"{contract['max_sequence_length']}."
+            f"{contract['max_sequence_length']}. Model input '{graph_input.name}' "
+            f"has shape {graph_input.shape} and dtype {graph_input.dtype}; metadata "
+            f"declares {contract['sequence_dtype']}. Check that the model, dataset "
+            "and metadata belong to the same export; tabular features are not sequence tokens."
         )
     graph_dtype = {"float": "float32", "double": "float64"}.get(graph_input.dtype, graph_input.dtype)
     if graph_dtype != contract["sequence_dtype"]:

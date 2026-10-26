@@ -11,6 +11,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from core.model_storage import read_model_bytes
+
 CPU = "CPUExecutionProvider"
 CUDA = "CUDAExecutionProvider"
 EVIDENCE_PREFIX = "ONNX_EXECUTION_DETAILS:"
@@ -63,6 +65,9 @@ class OnnxExecution:
             "evidence_scope": "first_successful_inference_only",
             "successful_runs": 0,
         }
+        # Nonexistent paths are retained for runtime mocks; real artifacts are
+        # decrypted only into memory, including the explicit CPU fallback path.
+        model_source = read_model_bytes(path) if Path(path).is_file() else str(path)
         self._profile_dir = None
         options = runtime.SessionOptions()
         options.intra_op_num_threads = 1
@@ -73,7 +78,7 @@ class OnnxExecution:
             options.enable_profiling = True
             options.profile_file_prefix = str(Path(self._profile_dir.name) / "profile")
         try:
-            self.session = runtime.InferenceSession(str(path), sess_options=options, providers=providers)
+            self.session = runtime.InferenceSession(model_source, sess_options=options, providers=providers)
         except Exception as exc:
             if CUDA not in providers or not allow_fallback:
                 self._cleanup_profile()
@@ -82,7 +87,7 @@ class OnnxExecution:
                 raise
             self.details["fallback_reason"] = f"CUDA session initialization failed: {exc}"
             try:
-                self.session = runtime.InferenceSession(str(path), sess_options=options, providers=[CPU])
+                self.session = runtime.InferenceSession(model_source, sess_options=options, providers=[CPU])
             except Exception:
                 self._cleanup_profile()
                 raise

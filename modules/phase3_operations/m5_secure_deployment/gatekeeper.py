@@ -39,6 +39,7 @@ def evaluate_deployment_gate(
             "info",
             "The uploaded metadata included deployment_policy thresholds, but Credora uses server-side policy for gate decisions.",
             "Configure deployment thresholds on the server, not in uploaded metadata.",
+            metric="details.self_reported_policy_ignored",
         ))
 
     checks = [
@@ -89,9 +90,11 @@ def evaluate_deployment_gate(
         status=status,
         score=gate_score,
         summary=summary,
-        findings=[Finding("deployment_gate", f"Deployment {decision}", severity, description, recommendation), *policy_findings],
+        findings=[Finding("deployment_gate", f"Deployment {decision}", severity, description, recommendation,
+                          metric="details.failed_checks" if decision == "blocked" else "details.medium_risk_finding_count" if decision == "conditional" else "details.decision"), *policy_findings],
         details={
             "decision": decision,
+            "self_reported_policy_ignored": bool(metadata.get("deployment_policy")),
             "checks": checks,
             "failed_checks": [check["check"] for check in failed_required],
             "high_risk_finding_count": len(high_risk),

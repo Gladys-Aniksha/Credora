@@ -10,7 +10,6 @@ from core.db import get_sensitive_label_taxonomy
 from core.model_backend import ModelBackend, load_model_backend
 from core.report_schema import Finding, ModuleResult
 
-
 TIMING_HINTS = ("duration", "iat", "inter_arrival", "latency", "time")
 VOLUME_HINTS = ("byte", "packet", "size", "count", "rate", "per_second")
 TRIAL_SEEDS = tuple(range(25))
@@ -97,7 +96,9 @@ def run_adversarial_validation(
 ) -> ModuleResult:
     metadata = metadata or {}
     if metadata.get("input_type", "tabular") == "sequence":
-        from modules.phase3_operations.m4_adversarial_validation.sequence_adversarial import run_sequence_adversarial_validation
+        from modules.phase3_operations.m4_adversarial_validation.sequence_adversarial import (
+            run_sequence_adversarial_validation,
+        )
 
         return run_sequence_adversarial_validation(model_path, dataset_path, metadata)
     try:
@@ -106,7 +107,8 @@ def run_adversarial_validation(
     except Exception as exc:  # noqa: BLE001
         return ModuleResult(
             "adversarial_validation", "fail", 0, "Adversarial validation could not load the model or dataset.",
-            [Finding("adversarial_validation", "Adversarial validation failed", "high", str(exc), "Verify the model and labeled CSV before deployment testing.")],
+            [Finding("adversarial_validation", "Adversarial validation failed", "high", str(exc), "Verify the model and labeled CSV before deployment testing.", metric="details.load_error")],
+            details={"load_error": str(exc) or type(exc).__name__},
         )
 
     target_column = metadata.get("target_column", "label")
@@ -115,7 +117,8 @@ def run_adversarial_validation(
     if missing:
         return ModuleResult(
             "adversarial_validation", "fail", 0, "Adversarial validation inputs are incomplete.",
-            [Finding("adversarial_validation", "Missing adversarial-test inputs", "critical", f"Missing column(s): {', '.join(missing)}", "Use a labeled dataset with every expected model feature.")],
+            [Finding("adversarial_validation", "Missing adversarial-test inputs", "critical", f"Missing column(s): {', '.join(missing)}", "Use a labeled dataset with every expected model feature.", metric="details.missing_columns")],
+            details={"missing_columns": missing},
         )
 
     x_test = data[feature_columns].copy()
@@ -209,18 +212,21 @@ def run_adversarial_validation(
             "adversarial_validation", "Adversarial traffic bypass risk", "high",
             f"{worst['scenario']} reduced F1 to {worst['f1']:.3f}; worst security-sensitive recall was {worst_sensitive_recall if worst_sensitive_recall is not None else 'not available'}.",
             "Block deployment, add adversarially varied suspicious flows to training, and require security-sensitive recall of at least 0.90 on the release holdout.",
+            metric="details.worst_case_f1" if worst["f1"] < 0.70 else "details.worst_sensitive_recall",
         ))
     elif max_f1_drop > 0.08 or min_stability < 0.85 or (worst_sensitive_recall is not None and worst_sensitive_recall < 0.90):
         findings.append(Finding(
             "adversarial_validation", "Adversarial resilience needs improvement", "medium",
             f"Worst scenario was {worst['scenario']} with F1 {worst['f1']:.3f} and prediction stability {worst['prediction_stability']:.3f}.",
             f"Retrain with the {worst['scenario']} scenario, then rerun Phase 3 until worst-case F1 and security-sensitive recall are both at least 0.90.",
+            metric="details.max_f1_drop" if max_f1_drop > 0.08 else "details.minimum_prediction_stability" if min_stability < 0.85 else "details.worst_sensitive_recall",
         ))
     else:
         findings.append(Finding(
             "adversarial_validation", "Adversarial release tests passed", "info",
             f"All {len(scenarios)} scenarios retained stable classifier behavior; worst-case F1 was {worst['f1']:.3f}.",
             "Keep these scenarios as mandatory release tests and expand them with captured production traffic.",
+            metric="details.worst_case_f1",
         ))
 
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"

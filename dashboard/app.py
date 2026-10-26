@@ -57,6 +57,14 @@ from dashboard.theme import inject_credora_theme
 
 st.set_page_config(page_title="Credora", page_icon="shield", layout="wide", initial_sidebar_state="collapsed")
 
+from core.model_storage import ModelStorageError, require_model_encryption_key
+
+try:
+    require_model_encryption_key()
+except ModelStorageError as exc:
+    st.error(str(exc))
+    st.stop()
+
 TEAL = "#A23438"
 NAVY = "#201A1A"
 ORANGE = "#C67836"

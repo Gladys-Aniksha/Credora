@@ -7,10 +7,12 @@ from threading import Event
 from typing import Callable
 
 from core.db import save_integrity_check, save_runtime_alert
+from core.model_access import model_operation
 from core.report_schema import ModuleResult
 from modules.phase3_operations.m6_runtime_integrity.watcher import check_runtime_integrity
 
 
+@model_operation("runtime.integrity")
 def run_integrity_cycle(model_path: str | Path, metadata_path: str | Path, owner_id: int | None = None) -> ModuleResult:
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     model_name = metadata.get("model_name") or Path(model_path).stem

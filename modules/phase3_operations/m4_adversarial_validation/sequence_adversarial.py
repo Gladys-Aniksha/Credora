@@ -10,7 +10,6 @@ from core.model_backend import load_model_backend
 from core.report_schema import Finding, ModuleResult
 from core.sequence_data import load_sequence_dataset
 
-
 TRIAL_SEEDS = tuple(range(12))
 MAX_SEQUENCE_EVIDENCE_ROWS = 512
 
@@ -155,7 +154,8 @@ def _failure(module: str, message: str, exc: Exception) -> ModuleResult:
         "fail",
         0,
         message,
-        [Finding(module, f"{module.replace('_', ' ').title()} failed", "high", str(exc), "Verify the sequence model, metadata, and NPZ dataset.")],
+        [Finding(module, f"{module.replace('_', ' ').title()} failed", "high", str(exc), "Verify the sequence model, metadata, and NPZ dataset.", metric="details.execution_error")],
+        details={"execution_error": str(exc) or type(exc).__name__},
     )
 
 
@@ -169,11 +169,11 @@ def run_sequence_robustness(model_path: str | Path, dataset_path: str | Path, me
     stability = details["minimum_prediction_stability"]
     score = round(max(0.0, min(100.0, 100.0 - max(0.0, details["baseline_f1"] - worst_f1) * 170 - (1 - stability) * 65)), 2)
     if worst_f1 < 0.70 or stability < 0.75:
-        findings.append(Finding("robustness_testing", "Sequence model is sensitive to perturbations", "high", f"Worst-case F1 was {worst_f1:.3f} and prediction stability was {stability:.3f}.", "Train with varied sequence corruption and rerun the robustness assessment."))
+        findings.append(Finding("robustness_testing", "Sequence model is sensitive to perturbations", "high", f"Worst-case F1 was {worst_f1:.3f} and prediction stability was {stability:.3f}.", "Train with varied sequence corruption and rerun the robustness assessment.", metric="details.worst_case_f1" if worst_f1 < 0.70 else "details.minimum_prediction_stability"))
     elif worst_f1 < 0.85 or stability < 0.90:
-        findings.append(Finding("robustness_testing", "Moderate sequence robustness risk", "medium", f"Worst-case F1 was {worst_f1:.3f}.", "Review the sequence positions and perturbations that caused the largest score drop."))
+        findings.append(Finding("robustness_testing", "Moderate sequence robustness risk", "medium", f"Worst-case F1 was {worst_f1:.3f}.", "Review the sequence positions and perturbations that caused the largest score drop.", metric="details.worst_case_f1" if worst_f1 < 0.85 else "details.minimum_prediction_stability"))
     else:
-        findings.append(Finding("robustness_testing", "Sequence perturbation tests passed", "info", f"Worst-case F1 was {worst_f1:.3f} with {stability:.3f} prediction stability."))
+        findings.append(Finding("robustness_testing", "Sequence perturbation tests passed", "info", f"Worst-case F1 was {worst_f1:.3f} with {stability:.3f} prediction stability.", metric="details.worst_case_f1"))
     details["scenarios"] = scenarios
     return ModuleResult("robustness_testing", "pass" if score >= 80 else "warning" if score >= 55 else "fail", score, f"Tested {len(scenarios)} sequence perturbation scenarios across {len(TRIAL_SEEDS)} trials.", findings, details)
 
@@ -190,10 +190,10 @@ def run_sequence_adversarial_validation(model_path: str | Path, dataset_path: st
     sensitive_penalty = max(0.0, 0.90 - sensitive) * 100 if sensitive is not None else 0.0
     score = round(max(0.0, min(100.0, 100.0 - max(0.0, details["baseline_f1"] - worst_f1) * 90 - (1 - stability) * 35 - sensitive_penalty)), 2)
     if worst_f1 < 0.70 or (sensitive is not None and sensitive < 0.75):
-        findings.append(Finding("adversarial_validation", "Sequence bypass risk detected", "high", f"Worst-case F1 was {worst_f1:.3f}; sensitive recall was {sensitive if sensitive is not None else 'not available'}.", "Block deployment and retrain with adversarially varied sequence samples."))
+        findings.append(Finding("adversarial_validation", "Sequence bypass risk detected", "high", f"Worst-case F1 was {worst_f1:.3f}; sensitive recall was {sensitive if sensitive is not None else 'not available'}.", "Block deployment and retrain with adversarially varied sequence samples.", metric="details.worst_case_f1" if worst_f1 < 0.70 else "details.worst_sensitive_recall"))
     elif worst_f1 < 0.85 or stability < 0.85 or (sensitive is not None and sensitive < 0.90):
-        findings.append(Finding("adversarial_validation", "Sequence adversarial resilience needs improvement", "medium", f"Worst-case scenario was {details['worst_case_scenario']} with F1 {worst_f1:.3f}.", "Add the failing sequence scenario to training and rerun the release assessment."))
+        findings.append(Finding("adversarial_validation", "Sequence adversarial resilience needs improvement", "medium", f"Worst-case scenario was {details['worst_case_scenario']} with F1 {worst_f1:.3f}.", "Add the failing sequence scenario to training and rerun the release assessment.", metric="details.worst_case_f1" if worst_f1 < 0.85 else "details.minimum_prediction_stability" if stability < 0.85 else "details.worst_sensitive_recall"))
     else:
-        findings.append(Finding("adversarial_validation", "Sequence adversarial release tests passed", "info", f"All {len(scenarios)} sequence scenarios retained acceptable behavior."))
+        findings.append(Finding("adversarial_validation", "Sequence adversarial release tests passed", "info", f"All {len(scenarios)} sequence scenarios retained acceptable behavior.", metric="details.worst_case_f1"))
     details["scenarios"] = scenarios
     return ModuleResult("adversarial_validation", "pass" if score >= 80 else "warning" if score >= 55 else "fail", score, f"Ran {len(scenarios)} sequence adversarial scenarios across {len(TRIAL_SEEDS)} trials.", findings, details)

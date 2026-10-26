@@ -74,9 +74,10 @@ def verify_model_file_type(path: str | Path) -> bool:
         except (onnx.checker.ValidationError, OSError, ValueError):
             return False
         return True
-    with file_path.open("rb") as model_file:
-        header = model_file.read(4)
-    detected = filetype.guess(file_path) if filetype else None
+    from core.model_storage import read_model_header
+
+    header = read_model_header(file_path)
+    detected = filetype.guess(header) if filetype else None
     if detected and detected.mime not in {"application/octet-stream", "application/x-pickle"}:
         return False
     return header.startswith(b"\x80") or header.startswith((b"(", b"c"))

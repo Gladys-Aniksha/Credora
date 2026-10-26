@@ -48,5 +48,5 @@ def test_dependency_scanner_reports_missing_requirements_file(tmp_path) -> None:
 
     assert result.status == "warning"
     assert result.score == 55
-    assert result.details == {"package_count": 0, "vulnerabilities": []}
+    assert result.details == {"package_count": 0, "vulnerabilities": [], "requirements_available": False}
     assert result.findings[0].title == "Missing requirements file"

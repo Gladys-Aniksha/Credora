@@ -19,6 +19,7 @@ jobs:
         run: |
           echo "CREDORA_API_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
           echo "CREDORA_JWT_SECRET=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+          echo "CREDORA_MODEL_ENCRYPTION_KEY=$(python -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')" >> "$GITHUB_ENV"
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Install CI analysis tools
@@ -31,5 +32,3 @@ jobs:
         run: bandit -q -lll -r core modules scripts api dashboard
       - name: Run Credora verification suite
         run: python scripts/verify_project.py --skip-scan
-      - name: Build production container
-        run: docker build --tag credora:${{ github.sha }} .

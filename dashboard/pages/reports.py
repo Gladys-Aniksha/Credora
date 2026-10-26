@@ -1,15 +1,42 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 import streamlit as st
 
+from core.artifact_integrity import assert_report_artifact_integrity
+from core.auth import can_view_all
 from core.config import REPORT_DIR
 from core.db import list_trusted_signers
+from core.model_access import model_access_context
+from core.report_evidence import validate_report_evidence
 from core.report_signing import verify_report_against_trusted_signers
 from core.security import ensure_within_directory, slugify_filename
 from dashboard.components.common import format_time, h, module_label, render_page_head
+
+
+def checked_report_download(
+    report_data: dict, owner_id: int | None, *, docx: bool = False, actor_id: int | None = None,
+) -> str | bytes:
+    with model_access_context(actor_id, "report_download", owner_id=owner_id):
+        validate_report_evidence(report_data)
+        assert_report_artifact_integrity(report_data, owner_id=owner_id)
+        if not docx:
+            return json.dumps(report_data, indent=2)
+
+        from modules.phase2_deep_trust.m9_docx_report.docx_report import (
+            create_docx_report,
+        )
+
+        root = ensure_within_directory(REPORT_DIR / (str(owner_id) if owner_id is not None else "shared"), REPORT_DIR)
+        root.mkdir(parents=True, exist_ok=True)
+        # Regenerate from the checked snapshot, not a potentially replaced DOCX file.
+        with tempfile.TemporaryDirectory(prefix="report-download-", dir=root) as temporary:
+            path = create_docx_report(report_data, Path(temporary) / "report.docx")
+            assert_report_artifact_integrity(report_data, owner_id=owner_id)
+            return path.read_bytes()
 
 
 def render_reports_page(
@@ -26,6 +53,18 @@ def render_reports_page(
     analysis_trace: list[dict],
 ) -> None:
     render_page_head("Reports", "Deployment evidence, exported assessments, and recommended actions")
+    report_owner: int | None = int(current_user["id"])
+    report_actor = int(current_user["id"])
+    if can_view_all(current_user) and st.session_state.get("show_all_users"):
+        binding = report_data.get("model_artifact")
+        report_owner = binding.get("owner_id") if isinstance(binding, dict) else None
+    export_error = None
+    try:
+        with model_access_context(report_actor, "report_render", owner_id=report_owner):
+            validate_report_evidence(report_data)
+            assert_report_artifact_integrity(report_data, owner_id=report_owner)
+    except (OSError, ValueError) as exc:
+        export_error = str(exc)
     report_phase = "phase3" if deployment_gate else "phase2"
     if report_data.get("execution") or report_data.get("input_provenance"):
         with st.expander("Execution and input provenance", icon=":material/memory:"):
@@ -50,21 +89,24 @@ def render_reports_page(
             st.markdown(f"<div class='path-box'>{h(report_path.name)}</div>", unsafe_allow_html=True)
             score_text = f"Trust score {trust_score:.1f}/100" if trust_score_issued else "Trust score not issued"
             st.caption(f"Generated {format_time(generated_at)} | {score_text}")
-            st.download_button(
-                "Download JSON report",
-                json.dumps(report_data, indent=2),
-                file_name=report_path.name,
-                mime="application/json",
-                width="stretch",
-            )
+            if export_error:
+                st.error(f"Report download blocked: {export_error}")
+            else:
+                st.download_button(
+                    "Download JSON report",
+                    lambda: checked_report_download(report_data, report_owner, actor_id=report_actor),
+                    file_name=report_path.name,
+                    mime="application/json",
+                    width="stretch",
+                )
             docx_report_value = report_data.get("docx_report_path") or (
                 REPORT_DIR / str(current_user["id"]) / f"{safe_model_name}_{report_phase}_trust_report.docx"
             )
             docx_path = Path(docx_report_value)
-            if docx_path.exists():
+            if not export_error and docx_path.exists():
                 st.download_button(
                     "Download DOCX report",
-                    docx_path.read_bytes(),
+                    lambda: checked_report_download(report_data, report_owner, docx=True, actor_id=report_actor),
                     file_name=docx_path.name,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     width="stretch",

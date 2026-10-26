@@ -1,21 +1,28 @@
 ﻿from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
-import json
 
 from core.config import REPORT_DIR
+from core.model_access import model_operation
 from core.security import ensure_within_directory, slugify_filename
 
 
+@model_operation("report.export.docx")
 def create_docx_report(report: Any, output_path: str | Path | None = None) -> Path:
+    from core.artifact_integrity import assert_report_artifact_integrity
+    from core.report_evidence import validate_report_evidence
+
+    report_dict = report.to_dict() if hasattr(report, "to_dict") else dict(report)
+    validate_report_evidence(report_dict)
+    assert_report_artifact_integrity(report_dict)
     try:
         from docx import Document
         from docx.shared import Inches
-    except ImportError as exc:  # noqa: BLE001
+    except ImportError as exc:
         raise RuntimeError("python-docx is required for DOCX report export. Run: pip install python-docx") from exc
 
-    report_dict = report.to_dict() if hasattr(report, "to_dict") else dict(report)
     model_name = report_dict.get("model_name", "model")
     path = Path(output_path) if output_path else REPORT_DIR / f"{slugify_filename(model_name)}_trust_report.docx"
     path = ensure_within_directory(path, REPORT_DIR)
@@ -31,7 +38,7 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
     doc.add_heading("Credora Trust Report", 0)
     doc.add_paragraph(f"Model: {model_name}")
     doc.add_paragraph(f"Generated at: {report_dict.get('generated_at', 'unknown')}")
-    trust_result = next(
+    trust_result: dict[str, Any] = next(
         (result for result in report_dict.get("module_results", []) if result.get("module") == "trust_score"),
         {},
     )
@@ -135,6 +142,7 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
         for finding in findings:
             doc.add_paragraph(f"{finding.get('title', 'Finding')} [{finding.get('severity', 'info')}]", style="List Bullet")
             doc.add_paragraph(str(finding.get("description", "")))
+            doc.add_paragraph(f"Evidence: {finding['module']}.{finding['metric']}", style="Caption")
             recommendation = finding.get("recommendation")
             if recommendation:
                 doc.add_paragraph(f"Recommendation: {recommendation}")
@@ -151,5 +159,5 @@ def create_docx_report(report: Any, output_path: str | Path | None = None) -> Pa
     else:
         doc.add_paragraph("No corrective action is required by the current assessment evidence.")
 
-    doc.save(path)
+    doc.save(str(path))
     return path

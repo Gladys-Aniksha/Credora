@@ -10,6 +10,7 @@ from core.model_package import (
     generate_signing_keypair,
     verify_model_package,
 )
+from core.model_storage import MAGIC, read_model_bytes
 
 
 def test_signed_model_package_verifies_and_extracts(tmp_path) -> None:
@@ -27,7 +28,8 @@ def test_signed_model_package_verifies_and_extracts(tmp_path) -> None:
     create_signed_model_package(model, metadata, requirements, package, private_key)
     verified = verify_model_package(package, public_key, tmp_path / "extracted")
 
-    assert verified.model_path.read_bytes() == b"trusted-model"
+    assert verified.model_path.read_bytes().startswith(MAGIC)
+    assert read_model_bytes(verified.model_path) == b"trusted-model"
     assert verified.manifest["signature_algorithm"] == "Ed25519"
 
 

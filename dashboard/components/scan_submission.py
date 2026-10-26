@@ -1,16 +1,28 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import asdict, dataclass
+import hashlib
 import json
 import re
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
-from core.config import MAX_UPLOAD_BYTES, METADATA_DIR, PROCESSED_DATA_DIR, SAMPLE_MODEL_DIR, SAMPLE_REQUIREMENTS_DIR
-from core.security import ensure_within_directory
+from core.artifact_integrity import register_or_verify_artifact
+from core.assessment_inputs import validate_assessment_model_format
+from core.config import (
+    MAX_UPLOAD_BYTES,
+    METADATA_DIR,
+    PROCESSED_DATA_DIR,
+    SAMPLE_MODEL_DIR,
+    SAMPLE_REQUIREMENTS_DIR,
+)
 from core.db import get_trust_weights, list_scan_reports
+from core.model_access import model_access_context
+from core.model_storage import write_model_bytes
+from core.security import ensure_within_directory
 from core.sequence_validation import validate_sequence_compatibility
 from dashboard.components.assessment_motion import render_motion
 from dashboard.components.common import h, render_score_evidence
@@ -59,6 +71,26 @@ def persist_upload(uploaded: object, subdir: str, project_root: Path) -> Path | 
     user = st.session_state.get("auth_user") or {"id": "shared"}
     folder = project_root / "data" / "uploads" / str(user["id"]) / subdir
     safe_name = Path(uploaded.name).name
+    if subdir == "models":
+        if Path(safe_name).suffix.lower() != ".credora":
+            validate_assessment_model_format(Path(safe_name))
+        payload = uploaded.getbuffer()
+        owner_id = int(user["id"]) if str(user["id"]).isdigit() else None
+        cache = st.session_state.setdefault("model_upload_paths", {})
+        payload_hash = hashlib.sha256(payload).hexdigest()
+        key = (str(user["id"]), str(folder.resolve()), safe_name, payload_hash,
+               getattr(uploaded, "file_id", None))
+        with model_access_context(owner_id, "model_upload", owner_id=owner_id):
+            cached = cache.get(key)
+            if cached is not None:
+                path = ensure_within_directory(Path(cached), folder)
+                register_or_verify_artifact(path, owner_id=owner_id, expected_sha256=payload_hash)
+                return path
+            path = ensure_within_directory(folder / f"{uuid4().hex}-{safe_name}", folder)
+            write_model_bytes(path, bytes(payload), owner_id=owner_id)
+            register_or_verify_artifact(path, owner_id=owner_id, expected_sha256=payload_hash)
+            cache[key] = str(path)
+            return path
     path = ensure_within_directory(folder / safe_name, folder)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(uploaded.getbuffer())
@@ -81,7 +113,11 @@ def _upload_file_row(title: str, description: str, formats: list[str], icon: str
         with formats_col:
             st.caption("Accepted formats: " + ", ".join(f".{ext}" for ext in formats))
         with upload_col:
-            return st.file_uploader(title, type=formats, key=key, label_visibility="collapsed")
+            uploaded = st.file_uploader(title, type=formats, key=key, label_visibility="collapsed")
+        if uploaded is not None:
+            with title_col:
+                st.caption("Selected file: " + Path(uploaded.name).name)
+        return uploaded
 
 
 def render_scan_submission(project_root: Path, *, standalone: bool = False) -> ScanSubmission:
@@ -128,12 +164,10 @@ def render_scan_submission(project_root: Path, *, standalone: bool = False) -> S
             is_sequence = input_type == "Sequence tokens/bytes"
             if not is_sequence:
                 st.session_state.pop("sequence_preflight_error", None)
-            artifact_col, data_col, device_col = st.columns(3)
-            with artifact_col:
-                native_weights = st.selectbox("Model artifact", ["ONNX / scikit-learn", "Approved native weights"], key="assessment_artifact_kind") == "Approved native weights"
+            data_col, device_col = st.columns(2)
             with data_col:
                 is_pcap = st.selectbox("Evaluation source", ["Prepared dataset", "Offline PCAP + labels"], key="assessment_dataset_kind") == "Offline PCAP + labels"
-            if native_weights or is_pcap:
+            if is_pcap:
                 st.session_state.pop("sequence_preflight_error", None)
             with device_col:
                 execution_device = st.selectbox("ONNX execution device", ["cpu", "auto", "cuda"],
@@ -142,8 +176,8 @@ def render_scan_submission(project_root: Path, *, standalone: bool = False) -> S
                 allow_cpu_fallback = st.checkbox("Allow CPU session fallback", key="assessment_cpu_fallback")
             _upload_step(3, "Upload required files", "Model artifacts and evaluation evidence")
             model_upload = _upload_file_row(
-                "Approved model weights" if native_weights else "Trained model", "Approved architecture metadata required" if native_weights else "Sequence ONNX classifier" if is_sequence else "Trained classifier artifact",
-                ["safetensors", "h5"] if native_weights else ["onnx"] if is_sequence else ["joblib", "pkl", "onnx"], "deployed_code", "sidebar_model_upload",
+                "Trained model", "Sequence ONNX classifier" if is_sequence else "Trained classifier artifact",
+                ["onnx"] if is_sequence else ["joblib", "pkl", "onnx"], "deployed_code", "sidebar_model_upload",
             )
             dataset_upload = _upload_file_row(
                 "Offline packet capture" if is_pcap else "Labeled test dataset", "Explicit PCAP schema and flow labels required" if is_pcap else "Labeled evaluation sequences" if is_sequence else "Labeled evaluation flow features",
@@ -160,21 +194,28 @@ def render_scan_submission(project_root: Path, *, standalone: bool = False) -> S
                 labels_upload = _upload_file_row("Flow label mapping", "src_ip, src_port, dst_ip, dst_port, protocol, label", ["csv"], "label", "assessment_flow_labels")
                 flow_labels_path = persist_upload(labels_upload, "flow_labels", project_root)
                 st.download_button("Label CSV template", "src_ip,src_port,dst_ip,dst_port,protocol,label\n", file_name="flow_labels.csv", mime="text/csv", icon=":material/download:")
-            model_path = persist_upload(model_upload, "models", project_root)
+            try:
+                model_path = persist_upload(model_upload, "models", project_root)
+            except (OSError, ValueError) as exc:
+                model_path = None
+                st.error(f"Model upload integrity check failed: {exc}")
             dataset_path = persist_upload(dataset_upload, "datasets", project_root)
             requirements_path = persist_upload(requirements_upload, "requirements", project_root)
             metadata_path = persist_upload(metadata_upload, "metadata", project_root)
-            if (is_sequence or native_weights) and requirements_path is None:
+            if is_sequence and requirements_path is None:
                 requirements_path = SAMPLE_REQUIREMENTS_DIR / "requirements_demo.txt"
                 st.caption("Standalone ONNX sequence models do not require a Python dependency manifest.")
 
-            extra_inputs_ready = (not is_pcap or flow_labels_path is not None) and (not (is_pcap or native_weights) or metadata_path is not None)
-            if is_sequence and not native_weights and not is_pcap and metadata_path and model_path and dataset_path:
+            extra_inputs_ready = not is_pcap or (flow_labels_path is not None and metadata_path is not None)
+            if is_sequence and not is_pcap and metadata_path and model_path and dataset_path:
                 try:
                     sequence_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
                     if not isinstance(sequence_metadata, dict):
                         raise ValueError("Model metadata must be a JSON object.")
-                    validate_sequence_compatibility(model_path, dataset_path, sequence_metadata)
+                    actor = st.session_state.get("auth_user", {}).get("id")
+                    actor_id = int(actor) if actor is not None else None
+                    with model_access_context(actor_id, "sequence_preflight", owner_id=actor_id):
+                        validate_sequence_compatibility(model_path, dataset_path, sequence_metadata)
                     st.success("Sequence model, metadata, and NPZ dataset are compatible.")
                 except (OSError, ValueError, json.JSONDecodeError) as exc:
                     st.error(f"Sequence compatibility check failed: {exc}")

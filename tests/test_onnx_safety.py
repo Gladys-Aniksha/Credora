@@ -33,3 +33,15 @@ def test_custom_operator_domain_is_rejected(tmp_path) -> None:
 
     with pytest.raises(UnsafeOnnxError, match="custom operator domains"):
         validate_onnx_model(path)
+
+
+def test_access_limit_remains_a_rate_denial_not_an_invalid_model(tmp_path, monkeypatch) -> None:
+    from core.model_access import ModelAccessLimitError, model_access_context
+
+    monkeypatch.setenv("CREDORA_MODEL_ACCESS_DISTINCT_LIMIT", "1")
+    first = build_sequence_onnx(tmp_path / "first.onnx")
+    second = build_sequence_onnx(tmp_path / "second.onnx")
+    with model_access_context(7, "sequence_preflight", owner_id=7):
+        validate_onnx_model(first)
+        with pytest.raises(ModelAccessLimitError, match="distinct-model limit"):
+            validate_onnx_model(second)

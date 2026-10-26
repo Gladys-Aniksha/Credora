@@ -26,19 +26,19 @@ def analyze_trust_drift(
 
     score = 100.0
     if previous_latest is None:
-        findings.append(Finding("trust_drift_timeline", "First trust baseline created", "info", "No previous scan exists for this model, so this score becomes the baseline."))
+        findings.append(Finding("trust_drift_timeline", "First trust baseline created", "info", "No previous scan exists for this model, so this score becomes the baseline.", metric="details.previous_scan_count"))
     elif drop_from_latest >= 15:
         score -= 35
-        findings.append(Finding("trust_drift_timeline", "Major trust regression", "high", f"Trust score dropped by {drop_from_latest} points from the previous scan.", "Compare model, dataset, dependency, and metadata changes before deployment."))
+        findings.append(Finding("trust_drift_timeline", "Major trust regression", "high", f"Trust score dropped by {drop_from_latest} points from the previous scan.", "Compare model, dataset, dependency, and metadata changes before deployment.", metric="details.drop_from_latest"))
     elif drop_from_latest >= 7:
         score -= 18
-        findings.append(Finding("trust_drift_timeline", "Moderate trust regression", "medium", f"Trust score dropped by {drop_from_latest} points from the previous scan.", "Review new warnings before approval."))
+        findings.append(Finding("trust_drift_timeline", "Moderate trust regression", "medium", f"Trust score dropped by {drop_from_latest} points from the previous scan.", "Review new warnings before approval.", metric="details.drop_from_latest"))
     else:
-        findings.append(Finding("trust_drift_timeline", "Trust score is stable", "info", "No meaningful trust regression was detected against previous scans."))
+        findings.append(Finding("trust_drift_timeline", "Trust score is stable", "info", "No meaningful trust regression was detected against previous scans.", metric="details.drop_from_latest"))
 
     if drop_from_best >= 20:
         score -= 15
-        findings.append(Finding("trust_drift_timeline", "Below historical best", "medium", f"Current score is {drop_from_best} points below this model's best recorded score.", "Inspect the trust timeline for version regressions."))
+        findings.append(Finding("trust_drift_timeline", "Below historical best", "medium", f"Current score is {drop_from_best} points below this model's best recorded score.", "Inspect the trust timeline for version regressions.", metric="details.drop_from_best"))
 
     status = "pass" if score >= 80 else "warning" if score >= 55 else "fail"
     return ModuleResult(

@@ -47,7 +47,7 @@ def calculate_trust_score(
         result = by_module.get(module)
         if result is None:
             missing_modules.append(module)
-            findings.append(Finding("trust_score", f"Missing {module}", "high", f"{module} did not run.", "Run the full trust scan."))
+            findings.append(Finding("trust_score", f"Missing {module}", "high", f"{module} did not run.", "Run the full trust scan.", metric=f"details.missing_modules.{len(missing_modules) - 1}"))
             continue
         scored_modules.append(module)
         weighted_score += result.score * weight
@@ -68,7 +68,7 @@ def calculate_trust_score(
 
     critical_or_high = [finding for result in by_module.values() for finding in result.findings if finding.severity in {"critical", "high"}]
     if critical_or_high:
-        findings.append(Finding("trust_score", "High-risk findings present", "high", f"There are {len(critical_or_high)} high or critical finding(s).", "Resolve high-risk findings before deployment."))
+        findings.append(Finding("trust_score", "High-risk findings present", "high", f"There are {len(critical_or_high)} high or critical finding(s).", "Resolve high-risk findings before deployment.", metric="details.high_risk_finding_count"))
 
     return ModuleResult(
         module="trust_score",
@@ -77,6 +77,7 @@ def calculate_trust_score(
         summary=summary,
         findings=findings,
         details={
+            "high_risk_finding_count": len(critical_or_high),
             "weights": active_weights,
             "expected_modules": list(expected_modules),
             "applicable_modules": applicable_modules,
